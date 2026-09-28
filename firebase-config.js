@@ -13,3 +13,7 @@ export const firebaseConfig = {
   messagingSenderId: "142562690102",
   appId: "1:142562690102:web:17834c94dcc05ed78d0497",
 };
+
+// ID do cliente OAuth "Web" do Google Cloud (projeto agenda-hcn), usado para
+// enviar eventos ao Google Agenda. Enquanto for null, a opção não aparece.
+export const googleClientId = "142562690102-c1uac6p10o5l6hk0daok764u7nbjgqkp.apps.googleusercontent.com";

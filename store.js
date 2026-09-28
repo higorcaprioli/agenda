@@ -10,6 +10,7 @@ const PUSH_DELAY = 700;
 
 const cache = new Map();
 const changeFns = new Set();
+const localFns = new Set();
 const statusFns = new Set();
 const timers = new Map();
 let state = { status: 'local', user: null, error: null };
@@ -30,7 +31,9 @@ for (const k of ls.keys()) {
 
 export const get = id => cache.get(id)?.data ?? null;
 export const status = () => state;
-export const onChange = fn => changeFns.add(fn);
+export const keys = prefix => [...cache.keys()].filter(k => k.startsWith(prefix));
+export const onChange = fn => changeFns.add(fn); // mudanças vindas de outro aparelho
+export const onLocalSet = fn => localFns.add(fn); // mudanças feitas neste aparelho
 export const onStatus = fn => statusFns.add(fn);
 
 export function set(id, data) {
@@ -38,6 +41,7 @@ export function set(id, data) {
   cache.set(id, entry);
   ls.set(PREFIX + id, JSON.stringify(entry));
   if (uid) schedule(id);
+  localFns.forEach(fn => fn(id));
 }
 
 function setStatus(status, error = null) {

@@ -1,5 +1,6 @@
 import * as store from './store.js';
 import { holidaysOf } from './holidays.js';
+import * as gsync from './gsync.js';
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MES3 = MESES.map(m => m.slice(0, 3));
@@ -42,6 +43,8 @@ function setPath(obj, path, val) {
   o[ks.at(-1)] = val;
 }
 
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
 const load = (id, fallback) => { const d = store.get(id); return d ? JSON.parse(JSON.stringify(d)) : fallback; };
 
 function dayHasContent(day) {
@@ -81,6 +84,11 @@ function renderDay(d, isTodayRoute) {
   const model = load(id, { hl: false, hours: {}, tasks: [], notes: '' });
   model.hours ||= {};
   model.tasks ||= [];
+  // tarefas antigas sem id ganham um (o Google Tarefas precisa de id estável)
+  if (model.tasks.some(t => !t.id)) {
+    model.tasks.forEach(t => { t.id ||= newId(); });
+    store.set(id, model);
+  }
   const y = d.getFullYear(), m = d.getMonth(), n = d.getDate();
   const h = holidays(y).get(di);
   const plan = store.get(`month:${ym(y, m)}`)?.lines?.[n];
@@ -327,8 +335,8 @@ function render() {
   const t = today();
   let tab = v;
   if (v === 'dia' && /^\d{4}-\d{2}-\d{2}$/.test(a)) renderDay(parseIso(a), false);
-  else if (v === 'mes' && /^\d{4}-\d{2}$/.test(a)) renderMonth(+a.slice(0, 4), +a.slice(5) - 1);
-  else if (v === 'ano' && /^\d{4}$/.test(a)) renderYear(+a);
+  else if (v === 'mes') /^\d{4}-\d{2}$/.test(a) ? renderMonth(+a.slice(0, 4), +a.slice(5) - 1) : renderMonth(t.getFullYear(), t.getMonth());
+  else if (v === 'ano') renderYear(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else if (v === 'objetivos') renderGoals(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else { renderDay(t, true); tab = 'hoje'; }
   paintTabs(tab === 'dia' ? 'hoje' : tab);
@@ -416,7 +424,7 @@ app.addEventListener('keydown', e => {
   if (el.classList.contains('new-task')) {
     const text = el.value.trim();
     if (!text) return;
-    view.model.tasks.push({ text, done: false });
+    view.model.tasks.push({ id: newId(), text, done: false });
     store.set(view.docId, view.model);
     rerender();
     app.querySelector('.new-task').focus();
@@ -467,14 +475,87 @@ syncBtn.addEventListener('click', () => {
     alert('Modo local: suas anotações ficam salvas só neste aparelho/navegador.\n\nPara sincronizar celular e PC, preencha o arquivo firebase-config.js (veja o LEIAME.md).');
   } else if (s.status === 'signed-out') store.signIn();
   else if (s.status === 'error' && !s.user) alert(s.error);
-  else if (s.user && confirm(`Conectado como ${s.user.email}.${s.error ? '\n\nÚltimo erro: ' + s.error : ''}\n\nDeseja sair?`)) store.signOut();
+  else if (s.user) openAccount();
 });
-store.onStatus(paintSync);
+store.onStatus(s => { paintSync(s); if (acct.open) paintAccount(); });
 paintSync(store.status());
+
+// ---------- conta + Google Agenda ----------
+const acct = document.getElementById('account');
+const gbar = document.getElementById('gbar');
+
+function gsyncText(g) {
+  const pend = g.pending ? ` · ${g.pending} dia${g.pending > 1 ? 's' : ''} na fila` : '';
+  switch (g.state) {
+    case 'ready': return g.last ? `Em dia · enviado às ${new Date(g.last).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Conectado';
+    case 'syncing': return 'Enviando…' + pend;
+    case 'need-auth': return 'Precisa reconectar' + pend;
+    case 'offline': return 'Sem internet' + pend;
+    case 'error': return 'Erro: ' + g.message;
+    default: return 'Desligado';
+  }
+}
+
+function paintAccount() {
+  const s = store.status();
+  const g = gsync.getStatus();
+  const on = gsync.enabled();
+  acct.querySelector('.acct-body').innerHTML = `
+    <h2>Conta</h2>
+    <p class="acct-email">${esc(s.user?.email)}</p>
+    ${gsync.available() ? `
+    <h3>Google Agenda</h3>
+    <p class="acct-help">Horários do dia viram eventos na agenda <b>Agenda HC</b> e as tarefas vão para o <b>Google Tarefas</b>. Assim aparecem no widget do Google Agenda.</p>
+    <p class="acct-status"><span class="dot ${on ? ({ ready: 'ok', syncing: 'busy', error: 'err' }[g.state] || 'warn') : ''}"></span>${on ? esc(gsyncText(g)) : 'Desligado'}</p>
+    <div class="acct-actions">
+      ${on ? `
+        ${g.state === 'need-auth' ? '<button class="btn primary" data-g="reconnect">Reconectar</button>' : '<button class="btn primary" data-g="sync">Sincronizar tudo agora</button>'}
+        <button class="btn" data-g="off">Desligar</button>`
+      : '<button class="btn primary" data-g="connect">Conectar Google Agenda</button>'}
+    </div>` : ''}
+    <div class="acct-foot">
+      <button class="btn danger" data-a="signout">Sair da conta</button>
+      <button class="btn" data-a="close">Fechar</button>
+    </div>`;
+}
+
+function openAccount() {
+  gsync.preload().catch(() => {});
+  paintAccount();
+  acct.showModal();
+}
+
+acct.addEventListener('click', async e => {
+  if (e.target === acct) { acct.close(); return; }
+  const a = e.target.closest('[data-a]')?.dataset.a;
+  const g = e.target.closest('[data-g]')?.dataset.g;
+  if (a === 'close') acct.close();
+  if (a === 'signout' && confirm('Sair da conta neste aparelho?')) { acct.close(); store.signOut(); }
+  try {
+    if (g === 'connect') await gsync.connect();
+    if (g === 'reconnect') await gsync.reconnect();
+    if (g === 'sync') await gsync.syncNow();
+    if (g === 'off' && confirm('Parar de enviar para o Google Agenda?\n(O que já foi enviado continua lá.)')) gsync.disconnect();
+  } catch (err) {
+    alert(err.message);
+  }
+  paintAccount();
+});
+
+gbar.addEventListener('click', async () => {
+  try { await gsync.reconnect(); } catch (err) { alert(err.message); }
+});
+
+gsync.onStatus(g => {
+  gbar.hidden = !(g.state === 'need-auth' && g.pending);
+  if (!gbar.hidden) gbar.querySelector('span').textContent = `Google Agenda: ${g.pending} dia${g.pending > 1 ? 's' : ''} aguardando envio.`;
+  if (acct.open) paintAccount();
+});
 
 // ---------- início ----------
 render();
 store.init();
+gsync.init();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
