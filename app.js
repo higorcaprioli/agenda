@@ -532,6 +532,72 @@ function installHtml() {
     <button class="btn" data-action="copy-link">Copiar endereço</button>`;
 }
 
+// ---------- Cor / Fonte ----------
+const SETTINGS_ID = 'settings';
+const THEMES = [['', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']];
+const PALETTES = {
+  ev: { label: 'Eventos anuais e aniversários', colors: ['#8e3fb5', '#d6336c', '#1e6fd9', '#2b8a3e', '#e8590c', '#8d5524'] },
+  hl: { label: 'Destacar data', colors: ['#f3ee6f', '#b2f2bb', '#ffc9de', '#a5d8ff', '#ffd8a8', '#d0bfff'] },
+  hol: { label: 'Feriados', colors: ['#b3261e', '#d9480f', '#862e9c', '#1864ab', '#2b8a3e', '#495057'] },
+};
+const settings = () => store.get(SETTINGS_ID) || {};
+
+function saveSetting(k, v) {
+  const s = { ...settings() };
+  if (v) s[k] = v; else delete s[k];
+  store.set(SETTINGS_ID, s);
+  window.AgendaTheme?.apply(s);
+  rerender();
+}
+
+function settingsHtml() {
+  const s = settings();
+  const fonts = window.AgendaTheme?.FONTS || [];
+  fonts.forEach(f => window.AgendaTheme.loadFont(f)); // para mostrar cada opção na própria fonte
+  const colorRow = (k, p) => {
+    const cur = s[k] || '';
+    return `<div class="set-row">
+      <span class="set-lbl">${p.label}</span>
+      <div class="swatches">
+        ${p.colors.map((c, i) => {
+          const on = cur ? cur.toLowerCase() === c : i === 0;
+          return `<button class="sw ${on ? 'on' : ''}" style="background:${c}" data-action="set" data-k="${k}" data-v="${i === 0 ? '' : c}" aria-label="Cor ${i + 1}" aria-pressed="${on}"></button>`;
+        }).join('')}
+        <label class="sw sw-custom ${cur && !p.colors.includes(cur.toLowerCase()) ? 'on' : ''}" title="Outra cor">
+          <input type="color" class="set-color" data-k="${k}" value="${cur || p.colors[0]}" aria-label="Escolher outra cor">+
+        </label>
+      </div>
+    </div>`;
+  };
+  return `<section class="m-sec">
+    <h2>Cor / Fonte</h2>
+    <div class="set-row">
+      <span class="set-lbl">Tema</span>
+      <div class="seg">${THEMES.map(([v, n]) => `<button class="${(s.theme || '') === v ? 'on' : ''}" data-action="set" data-k="theme" data-v="${v}">${n}</button>`).join('')}</div>
+    </div>
+    ${Object.entries(PALETTES).map(([k, p]) => colorRow(k, p)).join('')}
+    <div class="set-row">
+      <span class="set-lbl">Fonte</span>
+      <div class="fonts">
+        ${fonts.map(f => `<button class="font-opt ${(s.font || '') === f.id ? 'on' : ''}" data-action="set" data-k="font" data-v="${f.id}"${f.stack ? ` style='font-family:${f.stack}'` : ''}>
+          <b>${f.name}</b><small>${f.note || 'Agenda 2026 · Aa Bb 123'}</small>
+        </button>`).join('')}
+      </div>
+    </div>
+    <button class="btn" data-action="reset-settings">Restaurar padrão</button>
+  </section>`;
+}
+
+const settingsActions = {
+  set(btn) { saveSetting(btn.dataset.k, btn.dataset.v); },
+  'reset-settings'() {
+    if (!confirm('Voltar tema, cores e fonte para o padrão?')) return;
+    store.set(SETTINGS_ID, {});
+    window.AgendaTheme?.apply({});
+    rerender();
+  },
+};
+
 function renderMenu() {
   view = { docId: null };
   const s = store.status();
@@ -563,6 +629,8 @@ function renderMenu() {
         <a href="#/notas"><b>Anotações</b><span>Bloco de notas com categorias de afazeres</span></a>
       </nav>
     </section>
+
+    ${settingsHtml()}
 
     <section class="m-sec">
       <h2>Conta</h2>
@@ -645,6 +713,7 @@ app.addEventListener('change', e => {
   const el = e.target;
   if (el.type === 'checkbox') bind(el);
   else if (el.classList.contains('sr-date') && el.value) location.hash = '#/dia/' + el.value;
+  else if (el.classList.contains('set-color')) saveSetting(el.dataset.k, el.value);
 });
 
 app.addEventListener('submit', e => {
@@ -664,6 +733,7 @@ const actions = {
   },
   ...menuActions,
   ...notesActions,
+  ...settingsActions,
   'pick-date'() {
     const input = app.querySelector('.sr-date');
     try { input.showPicker(); } catch { input.focus(); input.click(); }
@@ -737,7 +807,10 @@ app.addEventListener('keydown', e => {
 });
 
 // mudanças vindas de outro aparelho: re-renderiza sem atrapalhar quem está digitando
-store.onChange(() => { if (isEditing()) deferred = true; else rerender(); });
+store.onChange(ids => {
+  if (ids.includes(SETTINGS_ID)) window.AgendaTheme?.apply(settings());
+  if (isEditing()) deferred = true; else rerender();
+});
 app.addEventListener('focusout', () => {
   if (deferred) setTimeout(() => { if (deferred && !isEditing()) rerender(); }, 0);
 });
