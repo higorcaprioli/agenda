@@ -77,7 +77,23 @@ textarea.ruled {
   padding: 8px 20px; padding-top: max(8px, env(safe-area-inset-top));
   background: var(--bar); color: var(--bar-ink);
 }
-.brand { font-family: var(--serif); font-weight: 700; font-size: 22px; letter-spacing: .01em; }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-weight: 700; font-size: 21px; letter-spacing: .02em; white-space: nowrap; }
+.brand svg { width: 22px; height: 22px; opacity: .8; }
+
+/* ---------- página de menu ---------- */
+.menu .m-sec { margin-bottom: 26px; }
+.menu h2 { font-family: var(--serif); font-size: 20px; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--band-2); }
+.menu p { margin: 0 0 12px; line-height: 1.55; }
+.m-ok { color: var(--ok); font-weight: 600; }
+.m-note { color: var(--muted); font-size: 14px; }
+.m-steps { margin: 0 0 12px; padding-left: 22px; line-height: 1.7; }
+.btn.big { width: 100%; padding: 14px; font-size: 16px; }
+.m-links { display: flex; flex-direction: column; }
+.m-links a { display: flex; flex-direction: column; gap: 2px; padding: 12px 4px; border-bottom: 1px solid var(--rule); }
+.m-links a:hover b { color: var(--pen); }
+.m-links b { font-size: 16px; }
+.m-links span { font-size: 13px; color: var(--muted); }
+.menu .sheet-foot a { text-decoration: underline; }
 .tabs { display: flex; gap: 4px; margin: 0 auto; }
 .tabs a {
   display: flex; align-items: center; gap: 7px;

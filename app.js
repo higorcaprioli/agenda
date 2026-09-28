@@ -144,7 +144,7 @@ function renderDay(d, isTodayRoute) {
     </section>
     <footer class="sheet-foot"><span>Semana ${isoWeek(d)}</span><span>${dayOfYear(d)} de ${isLeap(y) ? 366 : 365}</span></footer>
   </article>`;
-  document.title = `${n} ${MES3[m]} · Agenda HC`;
+  document.title = `${n} ${MES3[m]} · AGENDA HC`;
 }
 
 function afterDayInput(el) {
@@ -193,7 +193,7 @@ function renderMonth(y, m) {
     <div class="month-list">${rows}</div>
     <footer class="sheet-foot"><span>Toque no número para abrir a página do dia</span><span>* Feriado nacional</span></footer>
   </article>`;
-  document.title = `${MESES[m]} ${y} · Agenda HC`;
+  document.title = `${MESES[m]} ${y} · AGENDA HC`;
 }
 
 // ---------- calendário anual ----------
@@ -242,7 +242,7 @@ function renderYear(y) {
       <span>* Feriados nacionais</span>
     </footer>
   </article>`;
-  document.title = `Calendário ${y} · Agenda HC`;
+  document.title = `Calendário ${y} · AGENDA HC`;
 }
 
 // ---------- objetivos ----------
@@ -311,7 +311,7 @@ function renderGoals(y) {
     <div class="goal-list">${model.items.map(goalHtml).join('')}</div>
     <button class="add-goal" data-action="add-goal">${ICON.plus}Adicionar objetivo</button>
   </article>`;
-  document.title = `Objetivos ${y} · Agenda HC`;
+  document.title = `Objetivos ${y} · AGENDA HC`;
 }
 
 function afterGoalInput(el) {
@@ -322,6 +322,112 @@ function afterGoalInput(el) {
   card.querySelector('.g-sub .g-prog').innerHTML = progressHtml(goalProgress(g));
   app.querySelector('.goals-sum').innerHTML = summaryHtml(view.model.items);
 }
+
+// ---------- menu (toque em AGENDA HC) ----------
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  installEvt = e;
+  if (parseRoute().v === 'menu') rerender();
+});
+addEventListener('appinstalled', () => {
+  installEvt = null;
+  if (parseRoute().v === 'menu') rerender();
+});
+
+const UA = navigator.userAgent;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(UA);
+const isSamsung = /samsungbrowser/i.test(UA);
+const isAndroid = /android/i.test(UA);
+
+function installHtml() {
+  if (isStandalone()) {
+    return '<p class="m-ok">✓ Você já está usando o app instalado.</p>';
+  }
+  if (installEvt) {
+    return `<p>Instale a AGENDA HC para abrir direto pela tela inicial, em tela cheia e funcionando sem internet.</p>
+      <button class="btn primary big" data-action="install">Instalar AGENDA HC</button>`;
+  }
+  if (isIOS) {
+    return `<ol class="m-steps">
+      <li>Abra este endereço no <b>Safari</b>.</li>
+      <li>Toque no botão <b>Compartilhar</b> (quadrado com seta para cima, na barra de baixo).</li>
+      <li>Role e toque em <b>Adicionar à Tela de Início</b> → <b>Adicionar</b>.</li>
+    </ol>`;
+  }
+  if (isSamsung) {
+    return `<ol class="m-steps">
+      <li>Toque no menu <b>≡</b> na barra de baixo do Samsung Internet.</li>
+      <li>Toque em <b>Adicionar página a</b> → <b>Tela inicial</b>.</li>
+    </ol>
+    <p class="m-note">Recomendado: abra no <b>Chrome</b>, onde o app instala completo (com funcionamento offline).</p>
+    <button class="btn" data-action="copy-link">Copiar endereço</button>`;
+  }
+  return `<ol class="m-steps">
+      <li>Abra este endereço no <b>Google Chrome</b>${isAndroid ? ' do celular' : ''}.</li>
+      <li>Toque nos <b>três pontinhos ⋮</b> do Chrome (ao lado da barra de endereço, fora do app).</li>
+      <li>Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
+    </ol>
+    <p class="m-note">Se o app já estiver instalado, procure o ícone <b>AGENDA HC</b> na tela inicial.</p>
+    <button class="btn" data-action="copy-link">Copiar endereço</button>`;
+}
+
+function renderMenu() {
+  view = { docId: null };
+  const s = store.status();
+  const t = today();
+  const account = s.user
+    ? `<p class="m-note">Conectado como <b>${esc(s.user.email)}</b></p><button class="btn" data-action="account">Conta e Google Agenda</button>`
+    : s.status === 'signed-out'
+      ? '<p class="m-note">Entre com o Google para sincronizar celular e PC.</p><button class="btn primary" data-action="signin">Entrar com Google</button>'
+      : '<p class="m-note">Modo local: salvo só neste aparelho.</p>';
+
+  app.innerHTML = `
+  <article class="sheet menu">
+    <h1 class="page-title">AGENDA HC</h1>
+
+    <section class="m-sec">
+      <h2>Instalar o app</h2>
+      ${installHtml()}
+    </section>
+
+    <section class="m-sec">
+      <h2>Páginas</h2>
+      <nav class="m-links">
+        <a href="#/hoje"><b>Hoje</b><span>Página do dia com horários, tarefas e notas</span></a>
+        <a href="#/mes/${ym(t.getFullYear(), t.getMonth())}"><b>Planejamento do mês</b><span>Uma linha por dia</span></a>
+        <a href="#/ano/${t.getFullYear()}"><b>Calendário anual</b><span>Os 12 meses e os feriados</span></a>
+        <a href="#/objetivos/${t.getFullYear()}"><b>Objetivos</b><span>Metas do ano com etapas e prazos</span></a>
+      </nav>
+    </section>
+
+    <section class="m-sec">
+      <h2>Conta</h2>
+      ${account}
+    </section>
+
+    <footer class="sheet-foot"><a href="privacidade.html">Política de privacidade</a><span>AGENDA HC</span></footer>
+  </article>`;
+  document.title = 'Menu · AGENDA HC';
+}
+
+const menuActions = {
+  async install() {
+    if (!installEvt) return;
+    installEvt.prompt();
+    await installEvt.userChoice.catch(() => {});
+    installEvt = null;
+    rerender();
+  },
+  account() { openAccount(); },
+  signin() { store.signIn(); },
+  async 'copy-link'(btn) {
+    const url = location.origin + location.pathname;
+    try { await navigator.clipboard.writeText(url); btn.textContent = 'Endereço copiado ✓'; }
+    catch { prompt('Copie o endereço:', url); }
+  },
+};
 
 // ---------- roteamento ----------
 function parseRoute() {
@@ -338,6 +444,7 @@ function render() {
   else if (v === 'mes') /^\d{4}-\d{2}$/.test(a) ? renderMonth(+a.slice(0, 4), +a.slice(5) - 1) : renderMonth(t.getFullYear(), t.getMonth());
   else if (v === 'ano') renderYear(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else if (v === 'objetivos') renderGoals(/^\d{4}$/.test(a) ? +a : t.getFullYear());
+  else if (v === 'menu') renderMenu();
   else { renderDay(t, true); tab = 'hoje'; }
   paintTabs(tab === 'dia' ? 'hoje' : tab);
 }
@@ -377,6 +484,7 @@ app.addEventListener('change', e => {
 });
 
 const actions = {
+  ...menuActions,
   'pick-date'() {
     const input = app.querySelector('.sr-date');
     try { input.showPicker(); } catch { input.focus(); input.click(); }
