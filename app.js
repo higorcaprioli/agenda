@@ -767,5 +767,18 @@ store.init();
 gsync.init();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  // versão nova instalada → recarrega para aplicar (sem atrapalhar quem está digitando)
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  const applyUpdate = () => {
+    if (reloading) return;
+    if (isEditing()) { app.addEventListener('focusout', applyUpdate, { once: true }); return; }
+    reloading = true;
+    location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) applyUpdate(); });
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // ao voltar para o app, procura versão nova
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
