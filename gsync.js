@@ -17,6 +17,8 @@ const CFG_ID = 'gsync:config';
 const QUEUE_KEY = 'agenda:gsync:queue';
 const TOKEN_KEY = 'agenda:gsync:token';
 const REMINDER_MIN = 10;
+const EVENT_COLOR = '9'; // cor de evento do Google Agenda: 9 = "Mirtilo" (azul)
+const CALENDAR_BG = '#3f51b5';
 const LOCAL_DELAY = 1500;
 const REMOTE_DELAY = 20000; // dá tempo do outro aparelho terminar e o estado chegar aqui
 
@@ -148,6 +150,26 @@ async function ensureTargets() {
   return cfg;
 }
 
+// cor mudou desde o último envio? reenvia os eventos existentes (mesmo id → só atualiza)
+const needsRecolor = () => {
+  const cfg = store.get(CFG_ID) || {};
+  return !!cfg.calendarId && cfg.eventColor !== EVENT_COLOR;
+};
+
+async function recolor(cfg) {
+  // a cor da agenda na lista do Google (se a permissão não cobrir, segue só com a cor dos eventos)
+  await api('PATCH', `${CAL}/users/me/calendarList/${encodeURIComponent(cfg.calendarId)}?colorRgbFormat=true`,
+    { backgroundColor: CALENDAR_BG, foregroundColor: '#ffffff' }).catch(() => {});
+  for (const id of store.keys('gsync:2')) {
+    const st = store.get(id);
+    if (!Object.keys(st?.slots || {}).length) continue;
+    store.set(id, { ...st, slots: {} });
+    queue.add(id.slice('gsync:'.length));
+  }
+  saveQueue();
+  store.set(CFG_ID, { ...store.get(CFG_ID), eventColor: EVENT_COLOR });
+}
+
 async function ignoreGone(p) {
   try { await p; } catch (e) { if (e.status !== 404 && e.status !== 410) throw e; }
 }
@@ -172,7 +194,7 @@ async function syncDay(date, cfg) {
         const start = half === 'a' ? `${pad(h)}:00` : `${pad(h)}:30`;
         const end = half === 'a' ? `${pad(h)}:30` : `${pad(h + 1)}:00`;
         const body = {
-          id, summary: text, status: 'confirmed',
+          id, summary: text, status: 'confirmed', colorId: EVENT_COLOR,
           start: { dateTime: `${date}T${start}:00`, timeZone: tz },
           end: { dateTime: `${date}T${end}:00`, timeZone: tz },
           reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: REMINDER_MIN }] },
@@ -253,13 +275,14 @@ async function run() {
   if (running || !enabled()) return;
   for (const date of [...queue]) if (!isDirty(date)) queue.delete(date);
   saveQueue();
-  if (!queue.size) { setStatus({ state: 'ready', last: status.last }); return; }
+  if (!queue.size && !needsRecolor()) { setStatus({ state: 'ready', last: status.last }); return; }
   if (!hasToken()) { setStatus({ state: 'need-auth' }); return; }
   if (!navigator.onLine) { setStatus({ state: 'offline' }); return; }
   running = true;
   setStatus({ state: 'syncing' });
   try {
     const cfg = await ensureTargets();
+    if (needsRecolor()) await recolor(cfg);
     for (const date of [...queue].sort()) {
       await syncDay(date, cfg);
       queue.delete(date);
