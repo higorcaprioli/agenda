@@ -1,10 +1,17 @@
 // Service worker: deixa a agenda abrir offline.
 // Ao publicar uma nova versão, aumente o número em VERSION.
-const VERSION = 'agenda-v8';
+const VERSION = 'agenda-v9';
 const SHELL = [
   './', './index.html', './styles.css', './app.js', './store.js', './holidays.js', './gsync.js',
-  './firebase-config.js', './manifest.webmanifest',
+  './firebase-config.js', './manifest.webmanifest', './privacidade.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
+];
+// guardados já na instalação para o app abrir offline desde o primeiro uso
+// (a versão do Firebase precisa ser a mesma de store.js)
+const FB = 'https://www.gstatic.com/firebasejs/10.12.2';
+const EXTRAS = [
+  `${FB}/firebase-app.js`, `${FB}/firebase-auth.js`, `${FB}/firebase-firestore.js`,
+  'https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Inter:wght@400;500;600&display=swap',
 ];
 const RUNTIME_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -12,7 +19,11 @@ self.addEventListener('install', e => {
   // cache: 'reload' ignora o cache HTTP do navegador (senão uma versão velha pode ser guardada)
   e.waitUntil(
     caches.open(VERSION)
-      .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' }))))
+      .then(async c => {
+        await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
+        // extras não podem impedir a instalação se falharem
+        await Promise.allSettled(EXTRAS.map(u => c.add(new Request(u, { cache: 'reload' }))));
+      })
       .then(() => self.skipWaiting()),
   );
 });
