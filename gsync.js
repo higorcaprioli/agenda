@@ -217,6 +217,25 @@ async function syncDay(date, cfg) {
   }
 }
 
+// o dia tem algo diferente do que já foi enviado? (se outro aparelho já enviou, não precisa de token)
+function isDirty(date) {
+  const day = store.get('day:' + date) || {};
+  const st = store.get('gsync:' + date) || { slots: {}, tasks: {} };
+  const hours = day.hours || {};
+  for (const k of new Set([...Object.keys(hours), ...Object.keys(st.slots)])) {
+    if (/^\d+[ab]$/.test(k) && (hours[k] || '').trim() !== (st.slots[k] || '')) return true;
+  }
+  const tasks = (day.tasks || []).filter(t => t.id);
+  for (const t of tasks) {
+    const text = (t.text || '').trim();
+    const prev = st.tasks[t.id];
+    if (!text) { if (prev) return true; continue; }
+    if (!prev || prev.text !== text || prev.done !== !!t.done) return true;
+  }
+  const ids = new Set(tasks.map(t => t.id));
+  return Object.keys(st.tasks).some(id => !ids.has(id));
+}
+
 // ---------- fila ----------
 function schedule(delay) {
   clearTimeout(timer);
@@ -232,6 +251,8 @@ export function enqueue(date, delay = LOCAL_DELAY) {
 
 async function run() {
   if (running || !enabled()) return;
+  for (const date of [...queue]) if (!isDirty(date)) queue.delete(date);
+  saveQueue();
   if (!queue.size) { setStatus({ state: 'ready', last: status.last }); return; }
   if (!hasToken()) { setStatus({ state: 'need-auth' }); return; }
   if (!navigator.onLine) { setStatus({ state: 'offline' }); return; }

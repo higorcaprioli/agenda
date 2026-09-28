@@ -80,6 +80,14 @@ textarea.ruled {
 .brand { display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-weight: 700; font-size: 21px; letter-spacing: .02em; white-space: nowrap; }
 .brand svg { width: 22px; height: 22px; opacity: .8; }
 
+/* ---------- anotações ---------- */
+.note-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 28px; margin-bottom: 26px; align-items: start; }
+.note-cat { min-width: 0; }
+.nc-head { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; border-bottom: 2px solid var(--ink); }
+input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; height: 38px; color: var(--ink); }
+.nc-count { font-size: 12px; color: var(--muted); }
+.nc-list { list-style: none; margin: 0; padding: 0; }
+
 /* ---------- página de menu ---------- */
 .menu .m-sec { margin-bottom: 26px; }
 .menu h2 { font-family: var(--serif); font-size: 20px; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--band-2); }
@@ -323,7 +331,8 @@ textarea.ruled {
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-top: 1px solid rgba(255,255,255,.08);
   }
-  .tabs a { flex-direction: column; gap: 3px; font-size: 11px; padding: 6px 12px; }
+  .tabs a { flex-direction: column; gap: 3px; font-size: 10.5px; padding: 6px 4px; min-width: 0; flex: 1; }
+  .note-cats { grid-template-columns: 1fr; }
   .tabs svg { width: 22px; height: 22px; }
   #app { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 

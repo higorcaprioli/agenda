@@ -323,6 +323,84 @@ function afterGoalInput(el) {
   app.querySelector('.goals-sum').innerHTML = summaryHtml(view.model.items);
 }
 
+// ---------- anotações (categorias de afazeres) ----------
+const NOTES_ID = 'notes';
+const newCat = (title = '', items = []) => ({
+  id: newId(), title, items: items.map(text => ({ id: newId(), text, done: false })),
+});
+
+function renderNotes() {
+  const model = load(NOTES_ID, null) || {
+    cats: [
+      newCat('Chácara', ['Muro arrimo', 'Advogado', 'Alinhamento construção', 'Passar veneno']),
+      newCat('Pessoal / Ideias', ['APP desenvolvimento', 'Levar a churrasqueira no Dionata']),
+    ],
+  };
+  model.cats ||= [];
+  // o exemplo inicial só é salvo na primeira edição (assim não sobrescreve a nuvem num aparelho novo)
+  view = { docId: NOTES_ID, model, after: afterNoteInput };
+
+  const cats = model.cats.map((c, i) => {
+    const done = c.items.filter(it => it.done).length;
+    return `<section class="note-cat" data-c="${i}">
+      <div class="nc-head">
+        <input type="text" class="nc-title" data-path="cats.${i}.title" value="${esc(c.title)}" placeholder="Nome da categoria" aria-label="Categoria ${i + 1}">
+        <span class="nc-count">${c.items.length ? `${done}/${c.items.length}` : ''}</span>
+        <button class="g-del" data-action="del-cat" data-c="${i}" title="Excluir categoria" aria-label="Excluir categoria">${ICON.trash}</button>
+      </div>
+      <ul class="nc-list">
+        ${c.items.map((it, j) => `<li class="task ${it.done ? 'done' : ''}">
+          <input type="checkbox" data-path="cats.${i}.items.${j}.done" ${it.done ? 'checked' : ''} aria-label="Feito">
+          <input type="text" data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}">
+          <button class="x" data-action="del-item" data-c="${i}" data-j="${j}" aria-label="Remover item">×</button>
+        </li>`).join('')}
+      </ul>
+      <div class="task new">${ICON.plus}<input type="text" class="new-item" data-c="${i}" placeholder="Novo item" enterkeyhint="done" aria-label="Novo item em ${esc(c.title) || 'categoria'}"></div>
+    </section>`;
+  }).join('');
+
+  app.innerHTML = `
+  <article class="sheet notes-page">
+    <h1 class="page-title">Anotações</h1>
+    <div class="note-cats">${cats}</div>
+    <button class="add-goal" data-action="add-cat">${ICON.plus}Nova categoria</button>
+  </article>`;
+  document.title = 'Anotações · AGENDA HC';
+}
+
+function afterNoteInput(el) {
+  const sec = el.closest('.note-cat');
+  if (!sec) return;
+  const c = view.model.cats[+sec.dataset.c];
+  if (el.type === 'checkbox') el.closest('.task').classList.toggle('done', el.checked);
+  const done = c.items.filter(it => it.done).length;
+  sec.querySelector('.nc-count').textContent = c.items.length ? `${done}/${c.items.length}` : '';
+}
+
+const notesActions = {
+  'add-cat'() {
+    view.model.cats.push(newCat());
+    store.set(view.docId, view.model);
+    rerender();
+    const secs = app.querySelectorAll('.note-cat');
+    const last = secs[secs.length - 1];
+    last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    last.querySelector('.nc-title').focus({ preventScroll: true });
+  },
+  'del-cat'(btn) {
+    const c = view.model.cats[+btn.dataset.c];
+    if (!confirm(`Excluir a categoria "${c.title.trim() || 'sem nome'}" e todos os ${c.items.length} itens?`)) return;
+    view.model.cats.splice(+btn.dataset.c, 1);
+    store.set(view.docId, view.model);
+    rerender();
+  },
+  'del-item'(btn) {
+    view.model.cats[+btn.dataset.c].items.splice(+btn.dataset.j, 1);
+    store.set(view.docId, view.model);
+    rerender();
+  },
+};
+
 // ---------- menu (toque em AGENDA HC) ----------
 let installEvt = null;
 addEventListener('beforeinstallprompt', e => {
@@ -381,7 +459,9 @@ function renderMenu() {
     ? `<p class="m-note">Conectado como <b>${esc(s.user.email)}</b></p><button class="btn" data-action="account">Conta e Google Agenda</button>`
     : s.status === 'signed-out'
       ? '<p class="m-note">Entre com o Google para sincronizar celular e PC.</p><button class="btn primary" data-action="signin">Entrar com Google</button>'
-      : '<p class="m-note">Modo local: salvo só neste aparelho.</p>';
+      : s.status === 'local'
+        ? '<p class="m-note">Modo local: salvo só neste aparelho.</p>'
+        : '<p class="m-note">Carregando a conta…</p>';
 
   app.innerHTML = `
   <article class="sheet menu">
@@ -399,6 +479,7 @@ function renderMenu() {
         <a href="#/mes/${ym(t.getFullYear(), t.getMonth())}"><b>Planejamento do mês</b><span>Uma linha por dia</span></a>
         <a href="#/ano/${t.getFullYear()}"><b>Calendário anual</b><span>Os 12 meses e os feriados</span></a>
         <a href="#/objetivos/${t.getFullYear()}"><b>Objetivos</b><span>Metas do ano com etapas e prazos</span></a>
+        <a href="#/notas"><b>Anotações</b><span>Bloco de notas com categorias de afazeres</span></a>
       </nav>
     </section>
 
@@ -445,6 +526,7 @@ function render() {
   else if (v === 'ano') renderYear(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else if (v === 'objetivos') renderGoals(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else if (v === 'menu') renderMenu();
+  else if (v === 'notas') renderNotes();
   else { renderDay(t, true); tab = 'hoje'; }
   paintTabs(tab === 'dia' ? 'hoje' : tab);
 }
@@ -460,6 +542,7 @@ function paintTabs(active) {
     const t = a.dataset.tab;
     a.classList.toggle('on', t === active);
     a.href = t === 'hoje' ? '#/hoje'
+      : t === 'notas' ? '#/notas'
       : t === 'mes' ? `#/mes/${ym(ctx.y, ctx.m)}`
       : `#/${t}/${ctx.y}`;
   }
@@ -485,6 +568,7 @@ app.addEventListener('change', e => {
 
 const actions = {
   ...menuActions,
+  ...notesActions,
   'pick-date'() {
     const input = app.querySelector('.sr-date');
     try { input.showPicker(); } catch { input.focus(); input.click(); }
@@ -539,6 +623,18 @@ app.addEventListener('keydown', e => {
     return;
   }
   if (el.dataset.path?.startsWith('tasks.')) { app.querySelector('.new-task').focus(); return; }
+  if (el.classList.contains('new-item')) {
+    const text = el.value.trim();
+    if (!text) return;
+    const c = +el.dataset.c;
+    view.model.cats[c].items.push({ id: newId(), text, done: false });
+    store.set(view.docId, view.model);
+    rerender();
+    app.querySelector(`.new-item[data-c="${c}"]`).focus();
+    return;
+  }
+  const item = /^cats\.(\d+)\.(title|items\.\d+\.text)$/.exec(el.dataset.path || '');
+  if (item) { app.querySelector(`.new-item[data-c="${item[1]}"]`).focus(); return; }
   const inputs = [...app.querySelectorAll('input[type=text]')];
   const next = inputs[inputs.indexOf(el) + 1];
   if (next) next.focus(); else el.blur();
@@ -585,7 +681,12 @@ syncBtn.addEventListener('click', () => {
   else if (s.status === 'error' && !s.user) alert(s.error);
   else if (s.user) openAccount();
 });
-store.onStatus(s => { paintSync(s); if (acct.open) paintAccount(); });
+store.onStatus(s => {
+  paintSync(s);
+  if (acct.open) paintAccount();
+  // o menu mostra a conta (e não tem campos de texto): remonta quando o status muda
+  if (parseRoute().v === 'menu') rerender();
+});
 paintSync(store.status());
 
 // ---------- conta + Google Agenda ----------
