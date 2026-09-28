@@ -777,7 +777,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     location.reload();
   };
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) applyUpdate(); });
-  navigator.serviceWorker.register('./sw.js').then(reg => {
+  navigator.serviceWorker.ready.then(reg => {
     // ao voltar para o app, procura versão nova
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
   }).catch(() => {});
