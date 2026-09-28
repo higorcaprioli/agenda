@@ -7,7 +7,7 @@ const MES3 = MESES.map(m => m.slice(0, 3));
 const DIAS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const DIA3 = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const INICIAIS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7h às 21h
+const HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6h às 22h
 const STEPS = 6;
 
 // ---------- utilidades de data ----------
@@ -114,6 +114,7 @@ function renderDay(d, isTodayRoute) {
     </header>
     <div class="day-meta">
       ${isToday ? '<span class="chip today">Hoje</span>' : ''}
+      ${(eventsOf(y).get(di) || []).map(e => `<span class="chip ev">★ ${esc(e.title)}</span>`).join('')}
       ${h ? `<span class="chip hol">${esc(h.name)}${h.official ? ' *' : ''}</span>` : ''}
       ${plan?.trim() ? `<a class="chip plan" href="#/mes/${ym(y, m)}" title="Do planejamento do mês"><small>Plano</small> ${esc(plan)}</a>` : ''}
       <button class="hl-btn ${model.hl ? 'on' : ''}" data-action="hl" aria-pressed="${!!model.hl}" title="Destacar este dia no calendário anual">${ICON.marker}<span>Destacar</span></button>
@@ -162,6 +163,7 @@ function renderMonth(y, m) {
   ctx = { y, m };
   view = { docId: id, model };
   const H = holidays(y);
+  const E = eventsOf(y);
   const t = iso(today());
   const prev = new Date(y, m - 1, 1), next = new Date(y, m + 1, 1);
 
@@ -176,7 +178,7 @@ function renderMonth(y, m) {
     return `<div class="mrow ${cls}">
       <a class="md" href="#/dia/${di}" title="Abrir a página do dia ${n}"><b>${n}</b><span>${DIA3[wd]}</span>${dayHasContent(day) ? '<i class="dot" title="Tem anotações no dia"></i>' : ''}</a>
       <input type="text" data-path="lines.${n}" value="${esc(model.lines[n])}" aria-label="Dia ${n}">
-      ${h ? `<span class="tag" title="${esc(h.name)}">${esc(h.name)}${h.official ? ' *' : ''}</span>` : ''}
+      <span class="tags">${(E.get(di) || []).map(e => `<span class="tag ev" title="${esc(e.title)}">★ ${esc(e.title)}</span>`).join('')}${h ? `<span class="tag" title="${esc(h.name)}">${esc(h.name)}${h.official ? ' *' : ''}</span>` : ''}</span>
     </div>`;
   }).join('');
 
@@ -196,11 +198,70 @@ function renderMonth(y, m) {
   document.title = `${MESES[m]} ${y} · AGENDA HC`;
 }
 
+// ---------- aniversários e datas anuais ----------
+// item: { id, title, m (0-11), d, yearly, y (só quando não repete) }
+const EVENTS_ID = 'events';
+const SEED_EVENTS = [
+  { title: 'Aniversário do Pai', m: 1, d: 3, yearly: true },
+  { title: 'Aniversário da Mãe', m: 6, d: 22, yearly: true },
+];
+// o exemplo só é salvo na primeira alteração (não sobrescreve a nuvem num aparelho novo)
+const eventsDoc = () => load(EVENTS_ID, null) || { items: SEED_EVENTS.map(e => ({ id: newId(), ...e })) };
+
+/** Map "AAAA-MM-DD" -> [eventos] do ano y */
+function eventsOf(y) {
+  const map = new Map();
+  for (const e of eventsDoc().items) {
+    if (!e.yearly && e.y !== y) continue;
+    if (e.m === 1 && e.d === 29 && !isLeap(y)) continue;
+    const k = iso(new Date(y, e.m, e.d));
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(e);
+  }
+  return map;
+}
+
+function eventsSectionHtml(y) {
+  const items = eventsDoc().items
+    .map((e, i) => ({ ...e, i }))
+    .sort((a, b) => a.m - b.m || a.d - b.d || a.title.localeCompare(b.title));
+  return `<section class="yev" id="datas">
+    <h2 class="yev-title">Aniversários e datas anuais</h2>
+    <form class="yev-form">
+      <input type="text" name="title" placeholder="Ex.: Aniversário do Pai" required aria-label="Nome do evento">
+      <input type="date" name="date" value="${y}-${pad(today().getMonth() + 1)}-${pad(today().getDate())}" required aria-label="Data">
+      <label class="yev-rep"><input type="checkbox" name="yearly" checked> Repetir todos os anos</label>
+      <button class="btn primary" type="submit">Adicionar</button>
+    </form>
+    ${items.length ? `<ul class="yev-list">${items.map(e => `<li>
+      <span class="yev-date">${pad(e.d)}/${pad(e.m + 1)}</span>
+      <span class="yev-name">${esc(e.title)}</span>
+      <span class="yev-tag">${e.yearly ? 'todo ano' : e.y}</span>
+      <button class="x" data-action="del-event" data-i="${e.i}" aria-label="Remover ${esc(e.title)}">×</button>
+    </li>`).join('')}</ul>` : '<p class="m-note">Nenhuma data cadastrada.</p>'}
+  </section>`;
+}
+
+function addEvent(form) {
+  const f = new FormData(form);
+  const title = String(f.get('title') || '').trim();
+  const date = String(f.get('date') || '');
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const [yy, mm, dd] = date.split('-').map(Number);
+  const yearly = f.get('yearly') === 'on';
+  const doc = eventsDoc();
+  doc.items.push({ id: newId(), title, m: mm - 1, d: dd, yearly, ...(yearly ? {} : { y: yy }) });
+  store.set(EVENTS_ID, doc);
+  rerender();
+  document.getElementById('datas')?.scrollIntoView({ block: 'start' });
+}
+
 // ---------- calendário anual ----------
 function renderYear(y) {
   view = { docId: null };
   if (ctx.y !== y) ctx = { y, m: 0 };
   const H = holidays(y);
+  const E = eventsOf(y);
   const t = iso(today());
 
   const months = MESES.map((name, m) => {
@@ -212,20 +273,25 @@ function renderYear(y) {
       const col = (off + n - 1) % 7;
       const day = store.get('day:' + di);
       const h = H.get(di);
+      const ev = E.get(di);
       const cls = [
         col >= 5 && 'we', h && 'hol', di === t && 'today', day?.hl && 'hl',
-        (dayHasContent(day) || lines[n]?.trim()) && 'has',
+        (dayHasContent(day) || lines[n]?.trim()) && 'has', ev && 'ev',
       ].filter(Boolean).join(' ');
-      cells.push(`<td class="${cls}"><a href="#/dia/${di}"${h ? ` title="${esc(h.name)}"` : ''}>${n}</a></td>`);
+      const tip = [h?.name, ...(ev || []).map(e => e.title)].filter(Boolean).join(' · ');
+      cells.push(`<td class="${cls}"><a href="#/dia/${di}"${tip ? ` title="${esc(tip)}"` : ''}>${n}</a></td>`);
     }
     while (cells.length % 7) cells.push('<td></td>');
     const rows = [];
     for (let i = 0; i < cells.length; i += 7) rows.push(`<tr>${cells.slice(i, i + 7).join('')}</tr>`);
-    const hols = [...H.values()].filter(h => h.m === m);
+    const notes = [
+      ...[...H.values()].filter(h => h.m === m).map(h => ({ d: h.d, html: `${esc(h.name)}${h.official ? ' *' : ''}` })),
+      ...[...E.values()].flat().filter(e => e.m === m).map(e => ({ d: e.d, html: `<span class="ev-name">★ ${esc(e.title)}</span>` })),
+    ].sort((a, b) => a.d - b.d);
     return `<section class="mini">
       <h3><a href="#/mes/${ym(y, m)}">${name}</a></h3>
       <table><thead><tr>${INICIAIS.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>
-      <ul>${hols.map(h => `<li><b>${h.d}</b>${esc(h.name)}${h.official ? ' *' : ''}</li>`).join('')}</ul>
+      <ul>${notes.map(x => `<li><b>${x.d}</b>${x.html}</li>`).join('')}</ul>
     </section>`;
   }).join('');
 
@@ -239,8 +305,10 @@ function renderYear(y) {
       <span><i class="lg hl"></i>destacado</span>
       <span><i class="lg has"></i>com anotação</span>
       <span><i class="lg today"></i>hoje</span>
+      <span><i class="lg ev"></i>aniversário / data anual</span>
       <span>* Feriados nacionais</span>
     </footer>
+    ${eventsSectionHtml(y)}
   </article>`;
   document.title = `Calendário ${y} · AGENDA HC`;
 }
@@ -579,7 +647,21 @@ app.addEventListener('change', e => {
   else if (el.classList.contains('sr-date') && el.value) location.hash = '#/dia/' + el.value;
 });
 
+app.addEventListener('submit', e => {
+  if (!e.target.matches('.yev-form')) return;
+  e.preventDefault();
+  addEvent(e.target);
+});
+
 const actions = {
+  'del-event'(btn) {
+    const doc = eventsDoc();
+    const ev = doc.items[+btn.dataset.i];
+    if (!ev || !confirm(`Remover "${ev.title}"?`)) return;
+    doc.items.splice(+btn.dataset.i, 1);
+    store.set(EVENTS_ID, doc);
+    rerender();
+  },
   ...menuActions,
   ...notesActions,
   'pick-date'() {
@@ -625,6 +707,7 @@ app.addEventListener('click', e => {
 app.addEventListener('keydown', e => {
   const el = e.target;
   if (e.key !== 'Enter' || e.isComposing || el.tagName !== 'INPUT' || el.type !== 'text') return;
+  if (el.form) return; // formulários (ex.: datas anuais) enviam com Enter
   e.preventDefault();
   if (el.classList.contains('new-task')) {
     const text = el.value.trim();

@@ -1,6 +1,6 @@
 // Service worker: deixa a agenda abrir offline.
 // Ao publicar uma nova versão, aumente o número em VERSION.
-const VERSION = 'agenda-v10';
+const VERSION = 'agenda-v11';
 const SHELL = [
   './', './index.html', './styles.css', './app.js', './store.js', './holidays.js', './gsync.js',
   './firebase-config.js', './manifest.webmanifest', './privacidade.html',
