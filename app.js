@@ -419,9 +419,22 @@ const isIOS = /iphone|ipad|ipod/i.test(UA);
 const isSamsung = /samsungbrowser/i.test(UA);
 const isAndroid = /android/i.test(UA);
 
+const APK_URL = 'download/agenda-hc.apk';
+
 function installHtml() {
   if (isStandalone()) {
     return '<p class="m-ok">✓ Você já está usando o app instalado.</p>';
+  }
+  if (isAndroid) {
+    return `<p>Baixe o app <b>AGENDA HC</b> para Android. Ele funciona <b>sem internet</b> e sincroniza quando a rede voltar.</p>
+      <a class="btn primary big" href="${APK_URL}" download="AGENDA-HC.apk">Baixar app (APK)</a>
+      <ol class="m-steps">
+        <li>Toque em <b>Baixar app (APK)</b> e confirme o download.</li>
+        <li>Abra o arquivo <b>AGENDA-HC.apk</b> (na notificação ou em <b>Downloads</b>).</li>
+        <li>Se o Android pedir, toque em <b>Configurações</b> e ative <b>Permitir desta fonte</b>. Depois volte e toque em <b>Instalar</b>.</li>
+        <li>Se aparecer o aviso do <b>Play Protect</b>, toque em <b>Mais detalhes → Instalar mesmo assim</b> (o app ainda não está na loja).</li>
+      </ol>
+      <p class="m-note">Na primeira abertura, use com internet para entrar na conta. Depois ele funciona offline.</p>`;
   }
   if (installEvt) {
     return `<p>Instale a AGENDA HC para abrir direto pela tela inicial, em tela cheia e funcionando sem internet.</p>

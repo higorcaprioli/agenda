@@ -1,6 +1,6 @@
 // Service worker: deixa a agenda abrir offline.
 // Ao publicar uma nova versão, aumente o número em VERSION.
-const VERSION = 'agenda-v9';
+const VERSION = 'agenda-v10';
 const SHELL = [
   './', './index.html', './styles.css', './app.js', './store.js', './holidays.js', './gsync.js',
   './firebase-config.js', './manifest.webmanifest', './privacidade.html',
@@ -43,14 +43,17 @@ self.addEventListener('fetch', e => {
 
   // app: responde do cache e atualiza em segundo plano
   if (url.origin === location.origin) {
+    // arquivos grandes/baixáveis (APK) passam direto
+    if (url.pathname.includes('/download/')) return;
     e.respondWith(caches.open(VERSION).then(async cache => {
-      const cached = await cache.match(req, { ignoreSearch: true })
-        || (req.mode === 'navigate' ? await cache.match('./index.html') : undefined);
+      const cached = await cache.match(req, { ignoreSearch: true });
       const fresh = fetch(req.mode === 'navigate' ? req.url : req, { cache: 'no-cache' }).then(res => {
         if (res.ok) cache.put(req, res.clone());
         return res;
-      }).catch(() => cached);
-      return cached || fresh;
+      });
+      if (cached) { fresh.catch(() => {}); return cached; }
+      // sem cópia guardada: rede; offline, uma navegação cai na página do app
+      return fresh.catch(async () => (req.mode === 'navigate' && await cache.match('./index.html')) || Response.error());
     }));
     return;
   }
