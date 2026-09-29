@@ -961,23 +961,33 @@ function checkNewDay() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewDay(); });
 setInterval(checkNewDay, 60_000);
 
-// aba Ano: rola até o mês atual (se o dia de hoje não estiver visível)
+// Ano: rola até o mês atual · Hoje: rola até a hora atual
 function focusToday() {
+  let el, target;
   const cell = app.querySelector('.year td.today');
-  if (!cell) return;
+  if (cell) { el = cell; target = cell.closest('.mini'); }
+  else if (app.querySelector('.day-meta .chip.today')) {
+    const rows = app.querySelectorAll('.hours .hour');
+    const k = Math.min(Math.max(new Date().getHours() - HOURS[0], 0), rows.length - 1);
+    el = target = rows[k];
+  }
+  if (!el) return;
   const bar = document.querySelector('.appbar')?.offsetHeight || 0;
   const tabs = document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight;
-  const r = cell.getBoundingClientRect();
-  if (r.top >= bar && r.bottom <= Math.min(innerHeight, tabs)) return;
-  const sec = cell.closest('.mini');
-  scrollTo(0, sec.getBoundingClientRect().top + scrollY - bar - 12);
+  const r = el.getBoundingClientRect();
+  // no dia, a hora atual precisa estar na metade de cima; no ano, basta estar visível
+  const limit = cell ? Math.min(innerHeight, tabs) : bar + (Math.min(innerHeight, tabs) - bar) / 2;
+  if (r.top >= bar && r.bottom <= limit) return;
+  scrollTo(0, target.getBoundingClientRect().top + scrollY - bar - 12);
 }
 
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); });
-// tocar em Ano de novo, já estando no ano, também leva ao mês atual
-document.querySelector('#tabs a[data-tab="ano"]')?.addEventListener('click', e => {
-  if (location.hash === e.currentTarget.getAttribute('href')) setTimeout(focusToday);
-});
+// tocar em Ano/Hoje de novo, já estando nela, também leva a hoje
+for (const t of ['ano', 'hoje']) {
+  document.querySelector(`#tabs a[data-tab="${t}"]`)?.addEventListener('click', e => {
+    if (location.hash === e.currentTarget.getAttribute('href') || (t === 'hoje' && !location.hash)) setTimeout(focusToday);
+  });
+}
 
 // ---------- sincronização (botão) ----------
 const syncBtn = document.getElementById('sync');
