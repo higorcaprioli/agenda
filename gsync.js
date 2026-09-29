@@ -181,27 +181,25 @@ async function syncDay(date, cfg) {
   const list = encodeURIComponent(cfg.tasklistId);
   try {
     // horários → eventos (id fixo por dia/horário, então reenviar só atualiza)
-    const hours = day.hours || {};
-    for (const k of new Set([...Object.keys(hours), ...Object.keys(st.slots)])) {
+    const want = desiredSlots(day);
+    for (const k of new Set([...Object.keys(want), ...Object.keys(st.slots)])) {
       const m = /^(\d+)([ab])$/.exec(k);
       if (!m) continue;
-      const text = (hours[k] || '').trim();
-      if (text === (st.slots[k] || '')) continue;
-      const h = +m[1], half = m[2];
-      const id = `ahc${date.replaceAll('-', '')}s${pad(h)}${half}`;
+      const w = want[k];
+      if ((w?.sig || '') === (st.slots[k] || '')) continue;
+      const id = `ahc${date.replaceAll('-', '')}s${pad(+m[1])}${m[2]}`;
       const url = `${CAL}/calendars/${cal}/events/${id}`;
-      if (text) {
-        const start = half === 'a' ? `${pad(h)}:00` : `${pad(h)}:30`;
-        const end = half === 'a' ? `${pad(h)}:30` : `${pad(h + 1)}:00`;
+      if (w) {
+        const i = slotIndex(k);
         const body = {
-          id, summary: text, status: 'confirmed', colorId: EVENT_COLOR,
-          start: { dateTime: `${date}T${start}:00`, timeZone: tz },
-          end: { dateTime: `${date}T${end}:00`, timeZone: tz },
+          id, summary: w.text, status: 'confirmed', colorId: EVENT_COLOR,
+          start: { dateTime: `${date}T${indexTime(i)}:00`, timeZone: tz },
+          end: { dateTime: `${date}T${indexTime(i + w.n)}:00`, timeZone: tz },
           reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: REMINDER_MIN }] },
         };
         try { await api('PUT', url, body); }
         catch (e) { if (e.status === 404) await api('POST', `${CAL}/calendars/${cal}/events`, body); else throw e; }
-        st.slots[k] = text;
+        st.slots[k] = w.sig;
       } else {
         await ignoreGone(api('DELETE', url));
         delete st.slots[k];
@@ -239,13 +237,38 @@ async function syncDay(date, cfg) {
   }
 }
 
+// "10a" → 20 (meias-horas desde 0h); 20 → "10:00"
+const slotIndex = k => parseInt(k, 10) * 2 + (k.endsWith('b') ? 1 : 0);
+const indexTime = i => `${pad(Math.floor(i / 2))}:${i % 2 ? '30' : '00'}`;
+
+/** Eventos que o dia deve ter: { "10a": { text, n (meias-horas), sig } }.
+ *  Um horário esticado (day.spans) cobre os seguintes, que não viram evento próprio. */
+function desiredSlots(day) {
+  const hours = day.hours || {};
+  const spans = day.spans || {};
+  const keys = Object.keys(hours)
+    .filter(k => /^\d+[ab]$/.test(k) && (hours[k] || '').trim())
+    .sort((a, b) => slotIndex(a) - slotIndex(b));
+  const out = {};
+  let coveredUntil = -1;
+  for (const k of keys) {
+    const i = slotIndex(k);
+    if (i < coveredUntil) continue;
+    const n = Math.max(1, spans[k] || 1);
+    coveredUntil = i + n;
+    const text = hours[k].trim();
+    out[k] = { text, n, sig: n > 1 ? `${text}\u0001${n}` : text };
+  }
+  return out;
+}
+
 // o dia tem algo diferente do que já foi enviado? (se outro aparelho já enviou, não precisa de token)
 function isDirty(date) {
   const day = store.get('day:' + date) || {};
   const st = store.get('gsync:' + date) || { slots: {}, tasks: {} };
-  const hours = day.hours || {};
-  for (const k of new Set([...Object.keys(hours), ...Object.keys(st.slots)])) {
-    if (/^\d+[ab]$/.test(k) && (hours[k] || '').trim() !== (st.slots[k] || '')) return true;
+  const want = desiredSlots(day);
+  for (const k of new Set([...Object.keys(want), ...Object.keys(st.slots)])) {
+    if ((want[k]?.sig || '') !== (st.slots[k] || '')) return true;
   }
   const tasks = (day.tasks || []).filter(t => t.id);
   for (const t of tasks) {

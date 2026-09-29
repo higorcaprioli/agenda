@@ -120,13 +120,7 @@ function renderDay(d, isTodayRoute) {
       <button class="hl-btn ${model.hl ? 'on' : ''}" data-action="hl" aria-pressed="${!!model.hl}" title="Destacar este dia no calendário anual">${ICON.marker}<span>Destacar</span></button>
     </div>
     <div class="day-grid">
-      <section class="hours" aria-label="Horários">
-        ${HOURS.map(hr => `<div class="hour">
-          <span class="h">${hr}</span>
-          <input type="text" data-path="hours.${hr}a" value="${esc(model.hours[hr + 'a'])}" aria-label="${hr}h">
-          <input type="text" class="half" data-path="hours.${hr}b" value="${esc(model.hours[hr + 'b'])}" aria-label="${hr}h30">
-        </div>`).join('')}
-      </section>
+      <section class="hours" aria-label="Horários">${hoursHtml(model)}</section>
       <section class="tasks" aria-label="Tarefas">
         <h3 class="col-title">Tarefas <span class="tasks-count">${model.tasks.length ? `${done}/${model.tasks.length}` : ''}</span></h3>
         <ul class="task-list">
@@ -148,7 +142,103 @@ function renderDay(d, isTodayRoute) {
   document.title = `${n} ${MES3[m]} · AGENDA HC`;
 }
 
+// ---------- horários que ocupam várias linhas ----------
+// model.spans = { "10a": 4 } → começa às 10:00 e ocupa 4 meias-horas (até 12:00)
+const SLOTS = HOURS.flatMap(h => [h + 'a', h + 'b']);
+const slotTime = i => { const h = HOURS[0] + Math.floor(i / 2); return `${pad(h)}:${i % 2 ? '30' : '00'}`; };
+
+/** Para cada slot: { owner: índice do slot que o cobre, span } */
+function spanMap(model) {
+  const spans = model.spans || {};
+  const cover = new Array(SLOTS.length).fill(null);
+  SLOTS.forEach((s, i) => {
+    if (cover[i] !== null) return;
+    const n = (model.hours[s] || '').trim() ? Math.max(1, spans[s] || 1) : 1;
+    for (let k = i; k < Math.min(SLOTS.length, i + n); k++) cover[k] = i;
+  });
+  return cover;
+}
+
+function slotInputHtml(model, i, cover) {
+  const s = SLOTS[i];
+  const hr = parseInt(s, 10);
+  const label = `${hr}h${s.endsWith('b') ? '30' : ''}`;
+  const half = s.endsWith('b') ? 'half' : '';
+  const owner = cover[i];
+  if (owner !== i) {
+    const txt = model.hours[SLOTS[owner]];
+    return `<input type="text" class="${half} covered" data-slot="${i}" value="" placeholder="↳ ${esc(txt)}" disabled aria-label="${label} (ocupado)">`;
+  }
+  const text = model.hours[s] || '';
+  const n = cover.filter(o => o === i).length;
+  const range = n > 1 ? `<span class="span-range">${slotTime(i)} – ${slotTime(i + n)}</span>` : '';
+  const grip = text.trim() ? `<span class="grip span-grip" data-grip="slot" data-slot="${i}" title="Arraste para baixo para ocupar mais horários">⇕</span>` : '';
+  return `<span class="slot ${n > 1 ? 'span-start' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
+}
+
+function hoursHtml(model) {
+  const cover = spanMap(model);
+  return HOURS.map((hr, k) => `<div class="hour">
+    <span class="h">${hr}</span>
+    ${slotInputHtml(model, k * 2, cover)}
+    ${slotInputHtml(model, k * 2 + 1, cover)}
+  </div>`).join('');
+}
+
+// arrastar a alça ⇕ para esticar/encolher o horário
+app.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip="slot"]');
+  if (!grip) return;
+  e.preventDefault();
+  const start = +grip.dataset.slot;
+  const model = view.model;
+  // limite: não passa por cima de outro horário já escrito
+  let max = SLOTS.length - start;
+  for (let k = start + 1; k < SLOTS.length; k++) {
+    if ((model.hours[SLOTS[k]] || '').trim()) { max = k - start; break; }
+  }
+  grip.setPointerCapture(e.pointerId);
+  const rows = [...app.querySelectorAll('.hours [data-slot]')];
+  let n = model.spans?.[SLOTS[start]] || 1;
+  const preview = () => rows.forEach(r => {
+    const k = +r.dataset.slot;
+    r.classList.toggle('span-preview', k > start && k < start + n);
+  });
+  const move = ev => {
+    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY >= b.top && ev.clientY < b.bottom; });
+    if (!hit) return;
+    n = Math.min(max, Math.max(1, +hit.dataset.slot - start + 1));
+    preview();
+  };
+  const end = () => {
+    grip.removeEventListener('pointermove', move);
+    model.spans ||= {};
+    if (n > 1) model.spans[SLOTS[start]] = n; else delete model.spans[SLOTS[start]];
+    store.set(view.docId, model);
+    rerender();
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', end, { once: true });
+  grip.addEventListener('pointercancel', end, { once: true });
+});
+
 function afterDayInput(el) {
+  const slot = /^hours\.(\w+)$/.exec(el.dataset.path)?.[1];
+  if (slot) {
+    // apagou o texto de um horário esticado → desfaz o bloco
+    const had = !!view.model.spans?.[slot];
+    if (had && !el.value.trim()) { delete view.model.spans[slot]; store.set(view.docId, view.model); rerender(); }
+    // passou a ter texto (ou deixou de ter) → mostra/esconde a alça
+    const wrap = el.closest('.slot');
+    if (wrap && !!wrap.querySelector('.span-grip') !== !!el.value.trim() && !had) {
+      const i = +wrap.dataset.slot;
+      wrap.outerHTML = slotInputHtml(view.model, i, spanMap(view.model));
+      app.querySelector(`[data-path="hours.${slot}"]`)?.focus();
+      const inp = app.querySelector(`[data-path="hours.${slot}"]`);
+      inp?.setSelectionRange(inp.value.length, inp.value.length);
+    }
+    return;
+  }
   if (!el.dataset.path.startsWith('tasks.')) return;
   if (el.type === 'checkbox') el.closest('.task').classList.toggle('done', el.checked);
   const tasks = view.model.tasks;
@@ -417,9 +507,11 @@ function renderNotes() {
         <button class="g-del" data-action="del-cat" data-c="${i}" title="Excluir categoria" aria-label="Excluir categoria">${ICON.trash}</button>
       </div>
       <ul class="nc-list">
-        ${c.items.map((it, j) => `<li class="task ${it.done ? 'done' : ''}">
+        ${c.items.map((it, j) => `<li class="task nitem ${it.done ? 'done' : ''} ${it.urgent ? 'urgent' : ''}" data-j="${j}">
+          <span class="grip" data-grip="note" aria-label="Arrastar para mover" title="Segure e arraste para mover">⠿</span>
           <input type="checkbox" data-path="cats.${i}.items.${j}.done" ${it.done ? 'checked' : ''} aria-label="Feito">
-          <input type="text" data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}">
+          <span class="ntext">${it.urgent ? '<b class="urg" aria-label="Urgente">!</b>' : ''}<input type="text" data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}"></span>
+          <button class="urg-btn ${it.urgent ? 'on' : ''}" data-action="urgent" data-c="${i}" data-j="${j}" aria-pressed="${!!it.urgent}" title="${it.urgent ? 'Tirar urgência' : 'Marcar como urgente (sobe para o topo)'}">!</button>
           <button class="x" data-action="del-item" data-c="${i}" data-j="${j}" aria-label="Remover item">×</button>
         </li>`).join('')}
       </ul>
@@ -467,7 +559,53 @@ const notesActions = {
     store.set(view.docId, view.model);
     rerender();
   },
+  urgent(btn) {
+    const items = view.model.cats[+btn.dataset.c].items;
+    const j = +btn.dataset.j;
+    const it = items[j];
+    it.urgent = !it.urgent;
+    if (it.urgent) items.unshift(items.splice(j, 1)[0]); // urgente sobe para o topo
+    store.set(view.docId, view.model);
+    rerender();
+  },
 };
+
+// arrastar pela alça ⠿ para reordenar os itens de uma categoria (dedo ou mouse)
+app.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip="note"]');
+  if (!grip) return;
+  e.preventDefault();
+  const li = grip.closest('li');
+  const ul = li.parentElement;
+  const c = +li.closest('.note-cat').dataset.c;
+  const from = +li.dataset.j;
+  li.classList.add('dragging');
+  // ouvintes na janela: mover o <li> no DOM faria a alça perder o "toque"
+  const move = ev => {
+    if (ev.pointerId !== e.pointerId) return;
+    const others = [...ul.children].filter(x => x !== li);
+    const after = others.find(x => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+    if (after) { if (li.nextElementSibling !== after) ul.insertBefore(li, after); }
+    else if (ul.lastElementChild !== li) ul.appendChild(li);
+  };
+  const end = ev => {
+    if (ev.pointerId !== e.pointerId) return;
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', end);
+    removeEventListener('pointercancel', end);
+    li.classList.remove('dragging');
+    const to = [...ul.children].indexOf(li);
+    if (to !== from) {
+      const items = view.model.cats[c].items;
+      items.splice(to, 0, items.splice(from, 1)[0]);
+      store.set(view.docId, view.model);
+    }
+    rerender();
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+});
 
 // ---------- menu (toque em AGENDA HC) ----------
 let installEvt = null;
@@ -801,7 +939,7 @@ app.addEventListener('keydown', e => {
   }
   const item = /^cats\.(\d+)\.(title|items\.\d+\.text)$/.exec(el.dataset.path || '');
   if (item) { app.querySelector(`.new-item[data-c="${item[1]}"]`).focus(); return; }
-  const inputs = [...app.querySelectorAll('input[type=text]')];
+  const inputs = [...app.querySelectorAll('input[type=text]:not(:disabled)')];
   const next = inputs[inputs.indexOf(el) + 1];
   if (next) next.focus(); else el.blur();
 });

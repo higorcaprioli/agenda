@@ -81,6 +81,45 @@ textarea.ruled {
 .brand { display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-weight: 700; font-size: 21px; letter-spacing: .02em; white-space: nowrap; }
 .brand svg { width: 22px; height: 22px; opacity: .8; }
 
+/* ---------- alças de arrastar ---------- */
+.grip {
+  display: grid; place-items: center; width: 22px; height: 30px;
+  color: var(--muted); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  font-size: 16px; line-height: 1;
+}
+.grip:active { cursor: grabbing; color: var(--pen); }
+
+/* ---------- horário esticado (Hoje) ---------- */
+.hour .slot { position: relative; display: block; min-width: 0; }
+.hour .slot input { padding-right: 30px; }
+.span-grip { position: absolute; right: 0; top: 50%; transform: translateY(-50%); height: 100%; opacity: .55; }
+.hour .slot:hover .span-grip, .hour .slot:focus-within .span-grip { opacity: 1; }
+@media (hover: none) { .span-grip { opacity: .8; } }
+.hour .slot.span-start input { background-color: color-mix(in srgb, var(--pen) 13%, transparent); box-shadow: inset 3px 0 0 var(--pen); font-weight: 600; }
+.span-range {
+  position: absolute; right: 26px; top: 50%; transform: translateY(-50%);
+  font-size: 10.5px; color: var(--pen); font-weight: 600; pointer-events: none; white-space: nowrap;
+}
+.hour .slot.span-start input { padding-right: 110px; }
+.hour input.covered {
+  background-color: color-mix(in srgb, var(--pen) 13%, transparent); box-shadow: inset 3px 0 0 var(--pen);
+  cursor: default; opacity: 1;
+}
+.hour input.covered::placeholder { color: color-mix(in srgb, var(--pen) 55%, transparent); opacity: 1; font-style: italic; }
+.hour .span-preview, .hour .span-preview input { background-color: color-mix(in srgb, var(--pen) 22%, transparent) !important; }
+
+/* ---------- itens das anotações: mover e urgência ---------- */
+.task.nitem { grid-template-columns: 22px 22px 1fr 28px 26px; }
+.nitem .ntext { display: flex; align-items: center; min-width: 0; }
+.nitem .urg { color: var(--hol); font-weight: 800; font-size: 16px; padding: 0 2px 0 4px; }
+.nitem.urgent input[type="text"] { font-weight: 600; }
+.urg-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--rule); background: none;
+  color: var(--muted); font-weight: 800; font-size: 14px; line-height: 1; padding: 0;
+}
+.urg-btn.on { background: var(--hol); border-color: var(--hol); color: #fff; }
+.nitem.dragging { background: var(--band); box-shadow: 0 6px 18px rgba(0,0,0,.18); position: relative; z-index: 2; }
+
 /* ---------- aniversários e datas anuais ---------- */
 .mrow .tags { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
 .tag.ev, .ev-name { color: var(--ev); }
