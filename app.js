@@ -523,7 +523,7 @@ function renderNotes() {
   <article class="sheet notes-page">
     <h1 class="page-title">Anotações</h1>
     <div class="note-cats">${cats}</div>
-    <button class="add-goal" data-action="add-cat">${ICON.plus}Nova categoria</button>
+    <button class="add-goal" data-action="add-cat">${ICON.plus}Nova lista</button>
   </article>`;
   document.title = 'Anotações · AGENDA HC';
 }
