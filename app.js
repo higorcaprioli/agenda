@@ -998,6 +998,8 @@ paintSync(store.status());
 
 // ---------- conta + Google Agenda ----------
 const acct = document.getElementById('account');
+// conta do criador do app (Firebase UID): só ela vê a seção Desenvolvimento
+const CREATOR_UID = 'HcbJwAFdAucY027dPCssZTrzL5D2';
 const gbar = document.getElementById('gbar');
 
 function gsyncText(g) {
@@ -1028,6 +1030,13 @@ function paintAccount() {
         ${g.state === 'need-auth' ? '<button class="btn primary" data-g="reconnect">Reconectar</button>' : '<button class="btn primary" data-g="sync">Sincronizar tudo agora</button>'}
         <button class="btn" data-g="off">Desligar</button>`
       : '<button class="btn primary" data-g="connect">Conectar Google Agenda</button>'}
+    </div>` : ''}
+    ${s.user?.uid === CREATOR_UID ? `
+    <h3>Desenvolvimento</h3>
+    <p class="acct-help">Altere a AGENDA HC pelo <b>Claude Code</b>, rodando na nuvem. Peça a mudança por mensagem; ao terminar, ela é enviada ao GitHub (<b>higorcaprioli/agenda</b>) e o app se atualiza sozinho.</p>
+    <div class="acct-actions">
+      <a class="btn primary" href="https://claude.ai/code" target="_blank" rel="noopener">Abrir Claude Code</a>
+      <a class="btn" href="https://github.com/higorcaprioli/agenda" target="_blank" rel="noopener">Ver código</a>
     </div>` : ''}
     <div class="acct-foot">
       <button class="btn danger" data-a="signout">Sair da conta</button>

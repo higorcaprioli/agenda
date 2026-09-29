@@ -78,7 +78,7 @@ async function push(id) {
 
 function startSync(user) {
   uid = user.uid;
-  state.user = { name: user.displayName, email: user.email };
+  state.user = { name: user.displayName, email: user.email, uid: user.uid };
   setStatus('pending');
   let first = true;
   unsub = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'docs'), snap => {
