@@ -961,11 +961,13 @@ function checkNewDay() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewDay(); });
 setInterval(checkNewDay, 60_000);
 
-// Ano: rola até o mês atual · Hoje: rola até a hora atual
+// Ano: rola até o mês atual · Mês: até o dia de hoje · Hoje: até a hora atual
 function focusToday() {
   let el, target;
   const cell = app.querySelector('.year td.today');
+  const mrow = app.querySelector('.month-list .mrow.today');
   if (cell) { el = cell; target = cell.closest('.mini'); }
+  else if (mrow) el = target = mrow;
   else if (app.querySelector('.day-meta .chip.today')) {
     const rows = app.querySelectorAll('.hours .hour');
     const k = Math.min(Math.max(new Date().getHours() - HOURS[0], 0), rows.length - 1);
@@ -975,15 +977,15 @@ function focusToday() {
   const bar = document.querySelector('.appbar')?.offsetHeight || 0;
   const tabs = document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight;
   const r = el.getBoundingClientRect();
-  // no dia, a hora atual precisa estar na metade de cima; no ano, basta estar visível
+  // no mês e no dia, precisa estar na metade de cima; no ano, basta estar visível
   const limit = cell ? Math.min(innerHeight, tabs) : bar + (Math.min(innerHeight, tabs) - bar) / 2;
   if (r.top >= bar && r.bottom <= limit) return;
   scrollTo(0, target.getBoundingClientRect().top + scrollY - bar - 12);
 }
 
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); });
-// tocar em Ano/Hoje de novo, já estando nela, também leva a hoje
-for (const t of ['ano', 'hoje']) {
+// tocar em Ano/Mês/Hoje de novo, já estando nela, também leva a hoje
+for (const t of ['ano', 'mes', 'hoje']) {
   document.querySelector(`#tabs a[data-tab="${t}"]`)?.addEventListener('click', e => {
     if (location.hash === e.currentTarget.getAttribute('href') || (t === 'hoje' && !location.hash)) setTimeout(focusToday);
   });
