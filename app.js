@@ -120,7 +120,7 @@ function renderDay(d, isTodayRoute) {
       <button class="hl-btn ${model.hl ? 'on' : ''}" data-action="hl" aria-pressed="${!!model.hl}" title="Destacar este dia no calendário anual">${ICON.marker}<span>Destacar</span></button>
     </div>
     <div class="day-grid">
-      <section class="hours" aria-label="Horários">${hoursHtml(model)}</section>
+      <section class="hours" aria-label="Horários">${hoursHtml(model, isToday ? urgentReminders() : {})}</section>
       <section class="tasks" aria-label="Tarefas">
         <h3 class="col-title">Tarefas <span class="tasks-count">${model.tasks.length ? `${done}/${model.tasks.length}` : ''}</span></h3>
         <ul class="task-list">
@@ -176,11 +176,33 @@ function slotInputHtml(model, i, cover) {
   return `<span class="slot ${n > 1 ? 'span-start' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
 }
 
-function hoursHtml(model) {
+// lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje às 9h, 10h e 11h,
+// todo dia, até serem marcadas como feitas ou excluídas (nada é gravado nos dias)
+const REM_HOURS = [9, 10, 11];
+function urgentReminders() {
+  const byHour = {};
+  const cats = store.get(NOTES_ID)?.cats || [];
+  let k = 0;
+  for (const c of cats) for (const it of c.items || []) {
+    if (!it.urgent || it.done || !it.text?.trim()) continue;
+    (byHour[REM_HOURS[k++ % REM_HOURS.length]] ||= []).push({ ...it, cat: c.title });
+  }
+  return byHour;
+}
+
+function remindersHtml(list = []) {
+  return list.length ? `<ul class="rem">${list.map(it => `<li>
+    <input type="checkbox" data-action="rem-done" data-id="${esc(it.id)}" aria-label="Marcar como feito">
+    <b class="urg">!</b><span class="rem-text">${esc(it.text)}</span>${it.cat?.trim() ? `<a class="rem-cat" href="#/notas">${esc(it.cat)}</a>` : ''}
+  </li>`).join('')}</ul>` : '';
+}
+
+function hoursHtml(model, rem = {}) {
   const cover = spanMap(model);
   return HOURS.map((hr, k) => `<div class="hour">
     <span class="h">${hr}</span>
     ${slotInputHtml(model, k * 2, cover)}
+    ${remindersHtml(rem[hr])}
     ${slotInputHtml(model, k * 2 + 1, cover)}
   </div>`).join('');
 }
@@ -892,6 +914,14 @@ app.addEventListener('submit', e => {
 });
 
 const actions = {
+  'rem-done'(el) {
+    const doc = load(NOTES_ID, null);
+    const it = doc?.cats.flatMap(c => c.items).find(x => x.id === el.dataset.id);
+    if (!it) return;
+    it.done = true;
+    store.set(NOTES_ID, doc);
+    rerender();
+  },
   'del-event'(btn) {
     const doc = eventsDoc();
     const ev = doc.items[+btn.dataset.i];

@@ -326,6 +326,13 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
 .hour input { height: var(--line); border-bottom: 1px solid var(--rule); font-size: 14px; }
 .hour input:not(.half) { border-bottom-style: dotted; }
 .hour input.half { border-bottom-color: var(--band-2); }
+.hour .rem { grid-column: 2; list-style: none; margin: 0; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+.hour:has(.rem) .h { grid-row: span 3; }
+.rem li { display: flex; align-items: center; gap: 6px; min-height: 30px; font-size: 14px; color: var(--hol); }
+.rem li input[type="checkbox"] { flex: none; }
+.rem .urg { color: var(--hol); font-weight: 800; }
+.rem .rem-text { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.rem .rem-cat { flex: none; font-size: 11px; color: var(--muted); text-decoration: none; }
 
 .col-title {
   display: flex; justify-content: space-between; align-items: baseline;
