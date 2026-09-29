@@ -152,13 +152,16 @@ textarea.ruled {
 /* ---------- anotações ---------- */
 .note-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 28px; margin-bottom: 26px; align-items: start; }
 .note-cat { min-width: 0; }
-.nc-head { display: grid; grid-template-columns: 1fr auto auto auto auto; align-items: center; gap: 6px; border-bottom: 2px solid var(--ink); }
+.nc-head { display: grid; grid-template-columns: auto 1fr auto auto auto auto; align-items: center; gap: 6px; border-bottom: 2px solid var(--ink); }
 input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; height: 38px; color: var(--ink); }
 .nc-count { font-size: 12px; color: var(--muted); }
 .nc-move { width: 30px; height: 34px; display: grid; place-items: center; border: 0; background: none; border-radius: 8px; color: var(--muted); font-size: 18px; line-height: 1; }
 .nc-move:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .nc-move:disabled { opacity: .25; }
 .nc-list { list-style: none; margin: 0; padding: 0; }
+.nc-fold { width: 26px; height: 34px; display: grid; place-items: center; border: 0; background: none; padding: 0; color: var(--muted); font-size: 16px; line-height: 1; }
+.note-cat.min .nc-list, .note-cat.min .task.new { display: none; }
+.note-cat.min .nc-head { border-bottom-style: dashed; }
 
 /* ---------- Cor / Fonte ---------- */
 .set-row { display: grid; grid-template-columns: 200px 1fr; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--rule); }
@@ -472,7 +475,8 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
 /* ---------- impressão ---------- */
 @page { size: A4; margin: 0; }
 @media print {
-  .appbar, .toolbar, .add-goal, .g-del, .nc-move, .hl-btn, .task .x { display: none !important; }
+  .appbar, .toolbar, .add-goal, .g-del, .nc-move, .nc-fold, .hl-btn, .task .x { display: none !important; }
+  .note-cat.min .nc-list { display: revert !important; }
   body { background: #fff; }
   .sheet { margin: 0; box-shadow: none; min-height: 297mm; }
 }

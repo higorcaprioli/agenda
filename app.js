@@ -500,8 +500,9 @@ function renderNotes() {
 
   const cats = model.cats.map((c, i) => {
     const done = c.items.filter(it => it.done).length;
-    return `<section class="note-cat" data-c="${i}">
+    return `<section class="note-cat ${c.min ? 'min' : ''}" data-c="${i}">
       <div class="nc-head">
+        <button class="nc-fold" data-action="fold-cat" data-c="${i}" aria-expanded="${!c.min}" title="${c.min ? 'Abrir lista' : 'Minimizar lista'} (ou toque duas vezes no nome)">${c.min ? '▸' : '▾'}</button>
         <input type="text" class="nc-title" data-path="cats.${i}.title" value="${esc(c.title)}" placeholder="Nome da categoria" aria-label="Categoria ${i + 1}">
         <span class="nc-count">${c.items.length ? `${done}/${c.items.length}` : ''}</span>
         <button class="nc-move" data-action="move-cat" data-c="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Mover para cima" aria-label="Mover lista para cima">↑</button>
@@ -549,6 +550,7 @@ const notesActions = {
     last.scrollIntoView({ behavior: 'smooth', block: 'center' });
     last.querySelector('.nc-title').focus({ preventScroll: true });
   },
+  'fold-cat'(btn) { toggleCat(+btn.dataset.c); },
   'move-cat'(btn) {
     const cats = view.model.cats;
     const from = +btn.dataset.c, to = from + +btn.dataset.dir;
@@ -581,6 +583,23 @@ const notesActions = {
     rerender();
   },
 };
+
+// minimizar/abrir uma lista (fica salvo em cats[i].min)
+function toggleCat(i) {
+  const c = view.model.cats[i];
+  c.min = !c.min;
+  store.set(view.docId, view.model);
+  rerender();
+}
+// duplo toque/clique no nome da lista também minimiza/abre
+app.addEventListener('dblclick', e => {
+  const t = e.target.closest('.nc-title');
+  if (!t) return;
+  e.preventDefault();
+  getSelection()?.removeAllRanges();
+  t.blur();
+  toggleCat(+t.closest('.note-cat').dataset.c);
+});
 
 // arrastar pela alça ⠿ para reordenar os itens de uma categoria (dedo ou mouse)
 app.addEventListener('pointerdown', e => {
