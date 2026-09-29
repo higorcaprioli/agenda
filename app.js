@@ -980,7 +980,11 @@ function focusToday() {
   // no mês e no dia, precisa estar na metade de cima; no ano, basta estar visível
   const limit = cell ? Math.min(innerHeight, tabs) : bar + (Math.min(innerHeight, tabs) - bar) / 2;
   if (r.top >= bar && r.bottom <= limit) return;
-  scrollTo(0, target.getBoundingClientRect().top + scrollY - bar - 12);
+  // não passa do fim do calendário / da lista / dos horários (o fim fica no pé da tela)
+  const box = el.closest('.year-grid, .month-list, .hours');
+  const max = box.getBoundingClientRect().bottom + scrollY - Math.min(innerHeight, tabs);
+  const want = target.getBoundingClientRect().top + scrollY - bar - 12;
+  scrollTo(0, Math.max(0, Math.min(want, max)));
 }
 
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); });
