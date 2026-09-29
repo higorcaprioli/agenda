@@ -760,9 +760,9 @@ function renderMenu() {
     <section class="m-sec">
       <h2>Páginas</h2>
       <nav class="m-links">
-        <a href="#/hoje"><b>Hoje</b><span>Página do dia com horários, tarefas e notas</span></a>
-        <a href="#/mes/${ym(t.getFullYear(), t.getMonth())}"><b>Planejamento do mês</b><span>Uma linha por dia</span></a>
         <a href="#/ano/${t.getFullYear()}"><b>Calendário anual</b><span>Os 12 meses e os feriados</span></a>
+        <a href="#/mes/${ym(t.getFullYear(), t.getMonth())}"><b>Planejamento do mês</b><span>Uma linha por dia</span></a>
+        <a href="#/hoje"><b>Hoje</b><span>Página do dia com horários, tarefas e notas</span></a>
         <a href="#/objetivos/${t.getFullYear()}"><b>Objetivos</b><span>Metas do ano com etapas e prazos</span></a>
         <a href="#/notas"><b>Anotações</b><span>Bloco de notas com categorias de afazeres</span></a>
       </nav>
