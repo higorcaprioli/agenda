@@ -961,7 +961,23 @@ function checkNewDay() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewDay(); });
 setInterval(checkNewDay, 60_000);
 
-addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
+// aba Ano: rola até o mês atual (se o dia de hoje não estiver visível)
+function focusToday() {
+  const cell = app.querySelector('.year td.today');
+  if (!cell) return;
+  const bar = document.querySelector('.appbar')?.offsetHeight || 0;
+  const tabs = document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight;
+  const r = cell.getBoundingClientRect();
+  if (r.top >= bar && r.bottom <= Math.min(innerHeight, tabs)) return;
+  const sec = cell.closest('.mini');
+  scrollTo(0, sec.getBoundingClientRect().top + scrollY - bar - 12);
+}
+
+addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); });
+// tocar em Ano de novo, já estando no ano, também leva ao mês atual
+document.querySelector('#tabs a[data-tab="ano"]')?.addEventListener('click', e => {
+  if (location.hash === e.currentTarget.getAttribute('href')) setTimeout(focusToday);
+});
 
 // ---------- sincronização (botão) ----------
 const syncBtn = document.getElementById('sync');
@@ -1079,6 +1095,7 @@ gsync.onStatus(g => {
 
 // ---------- início ----------
 render();
+focusToday();
 store.init();
 gsync.init();
 
