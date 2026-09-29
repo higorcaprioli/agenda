@@ -176,9 +176,10 @@ function slotInputHtml(model, i, cover) {
   return `<span class="slot ${n > 1 ? 'span-start' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
 }
 
-// lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje às 9h, 10h e 11h,
-// todo dia, até serem marcadas como feitas ou excluídas (nada é gravado nos dias)
-const REM_HOURS = [9, 10, 11];
+// lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje, uma por hora a partir
+// das 9h (9, 10, 11, 12...; depois das 22h volta às 9h), todo dia, até serem marcadas como
+// feitas ou excluídas (nada é gravado nos dias)
+const REM_HOURS = HOURS.filter(h => h >= 9);
 function urgentReminders() {
   const byHour = {};
   const cats = store.get(NOTES_ID)?.cats || [];
