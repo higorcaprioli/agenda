@@ -504,6 +504,8 @@ function renderNotes() {
       <div class="nc-head">
         <input type="text" class="nc-title" data-path="cats.${i}.title" value="${esc(c.title)}" placeholder="Nome da categoria" aria-label="Categoria ${i + 1}">
         <span class="nc-count">${c.items.length ? `${done}/${c.items.length}` : ''}</span>
+        <button class="nc-move" data-action="move-cat" data-c="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Mover para cima" aria-label="Mover lista para cima">↑</button>
+        <button class="nc-move" data-action="move-cat" data-c="${i}" data-dir="1" ${i === model.cats.length - 1 ? 'disabled' : ''} title="Mover para baixo" aria-label="Mover lista para baixo">↓</button>
         <button class="g-del" data-action="del-cat" data-c="${i}" title="Excluir categoria" aria-label="Excluir categoria">${ICON.trash}</button>
       </div>
       <ul class="nc-list">
@@ -546,6 +548,16 @@ const notesActions = {
     const last = secs[secs.length - 1];
     last.scrollIntoView({ behavior: 'smooth', block: 'center' });
     last.querySelector('.nc-title').focus({ preventScroll: true });
+  },
+  'move-cat'(btn) {
+    const cats = view.model.cats;
+    const from = +btn.dataset.c, to = from + +btn.dataset.dir;
+    if (to < 0 || to >= cats.length) return;
+    cats.splice(to, 0, cats.splice(from, 1)[0]);
+    store.set(view.docId, view.model);
+    rerender();
+    // acompanha a lista movida
+    app.querySelectorAll('.note-cat')[to].scrollIntoView({ block: 'nearest' });
   },
   'del-cat'(btn) {
     const c = view.model.cats[+btn.dataset.c];
