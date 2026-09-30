@@ -113,7 +113,7 @@ textarea.ruled {
 .hour .span-preview, .hour .span-preview input { background-color: color-mix(in srgb, var(--pen) 22%, transparent) !important; }
 
 /* ---------- itens das anotações: mover e urgência ---------- */
-.task.nitem { grid-template-columns: 22px 1fr 28px 26px; }
+.task.nitem { grid-template-columns: 1fr 28px 26px; -webkit-touch-callout: none; }
 .nitem .ntext input[readonly] { cursor: pointer; -webkit-user-select: none; user-select: none; }
 .nitem .ntext input:not([readonly]) { background: var(--band); }
 .nitem .ntext { display: flex; align-items: center; min-width: 0; }

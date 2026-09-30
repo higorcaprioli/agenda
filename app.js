@@ -651,7 +651,6 @@ function renderNotes() {
       </div>
       <ul class="nc-list">
         ${c.items.map((it, j) => `<li class="task nitem ${it.done ? 'done' : ''} ${it.urgent ? 'urgent' : ''}" data-j="${j}">
-          <span class="grip" data-grip="note" aria-label="Arrastar para mover" title="Segure e arraste para mover">⠿</span>
           <span class="ntext">${it.urgent ? '<b class="urg" aria-label="Urgente">!</b>' : ''}<input type="text" readonly data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}${it.done ? ' (feito)' : ''}. Toque para riscar, dois toques para editar"></span>
           <button class="urg-btn ${it.urgent ? 'on' : ''}" data-action="urgent" data-c="${i}" data-j="${j}" aria-pressed="${!!it.urgent}" title="${it.urgent ? 'Tirar urgência' : 'Marcar como urgente (sobe para o topo)'}">!</button>
           <button class="x" data-action="del-item" data-c="${i}" data-j="${j}" aria-label="Remover item">×</button>
@@ -675,6 +674,7 @@ let tapTimer = null, tapItem = null;
 app.addEventListener('click', e => {
   const li = e.target.closest('.nitem');
   if (!li || e.target.closest('[data-action], .grip')) return;
+  if (noteDragged) { noteDragged = false; return; } // acabou de arrastar
   const inp = li.querySelector('.ntext input');
   if (!inp.readOnly) return; // já está editando
   e.preventDefault();
@@ -774,29 +774,60 @@ app.addEventListener('dblclick', e => {
   toggleCat(+t.closest('.note-cat').dataset.c);
 });
 
-// arrastar pela alça ⠿ para reordenar os itens de uma categoria (dedo ou mouse)
+// segurar o item (meio segundo, sem mexer) e arrastar para reordenar dentro da lista
+// (se o dedo se mexer antes disso, é rolagem normal da tela)
+let noteDrag = null, noteDragged = false;
 app.addEventListener('pointerdown', e => {
-  const grip = e.target.closest('[data-grip="note"]');
-  if (!grip) return;
-  e.preventDefault();
-  const li = grip.closest('li');
+  const li = e.target.closest('.nitem');
+  if (!li || e.button > 0 || e.target.closest('[data-action]')) return;
+  if (!li.querySelector('.ntext input').readOnly) return; // editando o texto
+  const start = { x: e.clientX, y: e.clientY };
+  let lastY = e.clientY, active = false;
   const ul = li.parentElement;
   const c = +li.closest('.note-cat').dataset.c;
   const from = +li.dataset.j;
-  li.classList.add('dragging');
-  // ouvintes na janela: mover o <li> no DOM faria a alça perder o "toque"
-  const move = ev => {
-    if (ev.pointerId !== e.pointerId) return;
+  const place = y => {
     const others = [...ul.children].filter(x => x !== li);
-    const after = others.find(x => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+    const after = others.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
     if (after) { if (li.nextElementSibling !== after) ul.insertBefore(li, after); }
     else if (ul.lastElementChild !== li) ul.appendChild(li);
   };
-  const end = ev => {
+  const auto = () => {
+    if (!active) return;
+    const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
+    const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
+    const d = lastY < top ? -10 : lastY > bottom ? 10 : 0;
+    if (d) { scrollBy(0, d); place(lastY); }
+    requestAnimationFrame(auto);
+  };
+  const timer = setTimeout(() => {
+    active = true; noteDragged = true;
+    noteDrag = li;
+    li.classList.add('dragging');
+    navigator.vibrate?.(30);
+    getSelection()?.removeAllRanges();
+    requestAnimationFrame(auto);
+  }, 450);
+  const move = ev => {
     if (ev.pointerId !== e.pointerId) return;
+    lastY = ev.clientY;
+    if (!active) {
+      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 8) cleanup(); // é rolagem
+      return;
+    }
+    place(ev.clientY);
+  };
+  const cleanup = () => {
+    clearTimeout(timer);
     removeEventListener('pointermove', move);
     removeEventListener('pointerup', end);
     removeEventListener('pointercancel', end);
+  };
+  const end = ev => {
+    if (ev.pointerId !== e.pointerId) return;
+    cleanup();
+    if (!active) return;
+    active = false; noteDrag = null;
     li.classList.remove('dragging');
     const to = [...ul.children].indexOf(li);
     if (to !== from) {
@@ -805,11 +836,15 @@ app.addEventListener('pointerdown', e => {
       store.set(view.docId, view.model);
     }
     rerender();
+    setTimeout(() => { noteDragged = false; }, 50); // o "click" que vem depois não risca o item
   };
   addEventListener('pointermove', move);
   addEventListener('pointerup', end);
   addEventListener('pointercancel', end);
 });
+// enquanto arrasta, a tela não rola com o dedo; e o toque longo não abre menu
+addEventListener('touchmove', e => { if (noteDrag) e.preventDefault(); }, { passive: false });
+app.addEventListener('contextmenu', e => { if (e.target.closest('.nitem')) e.preventDefault(); });
 
 // ---------- menu (toque em AGENDA HC) ----------
 let installEvt = null;
