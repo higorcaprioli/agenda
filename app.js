@@ -173,7 +173,8 @@ function slotInputHtml(model, i, cover) {
   const n = cover.filter(o => o === i).length;
   const range = n > 1 ? `<span class="span-range">${slotTime(i)} – ${slotTime(i + n)}</span>` : '';
   const grip = text.trim() ? `<span class="grip span-grip" data-grip="slot" data-slot="${i}" title="Arraste para baixo para ocupar mais horários">⇕</span>` : '';
-  return `<span class="slot ${n > 1 ? 'span-start' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
+  const mover = text.trim() ? `<span class="grip move-grip" data-grip="move" data-slot="${i}" title="Segure e arraste para mudar de horário">•</span>` : '';
+  return `<span class="slot ${n > 1 ? 'span-start' : ''} ${mover ? 'has-move' : ''}" data-slot="${i}">${mover}<input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
 }
 
 // lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje, uma por hora a partir
@@ -244,6 +245,71 @@ app.addEventListener('pointerdown', e => {
   grip.addEventListener('pointerup', end, { once: true });
   grip.addEventListener('pointercancel', end, { once: true });
 });
+
+// arrastar o ponto • para mudar o afazer de horário (em cima de outro afazer: troca os dois)
+app.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip="move"]');
+  if (!grip) return;
+  e.preventDefault();
+  const from = +grip.dataset.slot;
+  const model = view.model;
+  const rows = [...app.querySelectorAll('.hours [data-slot]')].filter(r => !r.closest('.slot') || r.classList.contains('slot'));
+  const src = grip.closest('.slot');
+  src.classList.add('moving');
+  let to = from, lastY = e.clientY, run = true;
+  const mark = () => rows.forEach(r => r.classList.toggle('move-target', +r.dataset.slot === to && to !== from));
+  const pick = y => {
+    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return y >= b.top && y < b.bottom; });
+    if (hit) { to = +hit.dataset.slot; mark(); }
+  };
+  // rola a tela sozinho quando o dedo chega perto do topo ou do pé
+  const auto = () => {
+    if (!run) return;
+    const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
+    const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
+    const d = lastY < top ? -10 : lastY > bottom ? 10 : 0;
+    if (d) { scrollBy(0, d); pick(lastY); }
+    requestAnimationFrame(auto);
+  };
+  requestAnimationFrame(auto);
+  const move = ev => { if (ev.pointerId !== e.pointerId) return; lastY = ev.clientY; pick(lastY); };
+  const end = ev => {
+    if (ev.pointerId !== e.pointerId) return;
+    run = false;
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', end);
+    removeEventListener('pointercancel', end);
+    if (ev.type === 'pointerup' && to !== from) moveSlot(model, from, to);
+    rerender();
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+});
+
+function moveSlot(model, from, to) {
+  const H = model.hours, S = (model.spans ||= {});
+  const cover = spanMap(model);
+  const a = SLOTS[from];
+  // soltou dentro de um bloco esticado de outro afazer → vale o início dele
+  const owner = cover[to];
+  if (owner !== null && owner !== from && owner !== to && (H[SLOTS[owner]] || '').trim()) to = owner;
+  const b = SLOTS[to];
+  if (a === b) return;
+  const ta = H[a], sa = S[a];
+  const tb = H[b], sb = S[b];
+  if ((tb || '').trim()) { H[a] = tb; if (sb) S[a] = sb; else delete S[a]; }
+  else { delete H[a]; delete S[a]; }
+  H[b] = ta; if (sa) S[b] = sa; else delete S[b];
+  // um bloco esticado não pode passar por cima de outro afazer nem do fim do dia
+  SLOTS.forEach((s, i) => {
+    if (!S[s]) return;
+    let n = Math.min(S[s], SLOTS.length - i);
+    for (let k = i + 1; k < i + n; k++) if ((H[SLOTS[k]] || '').trim()) { n = k - i; break; }
+    if (n > 1) S[s] = n; else delete S[s];
+  });
+  store.set(view.docId, model);
+}
 
 function afterDayInput(el) {
   const slot = /^hours\.(\w+)$/.exec(el.dataset.path)?.[1];

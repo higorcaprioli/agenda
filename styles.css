@@ -92,6 +92,10 @@ textarea.ruled {
 /* ---------- horário esticado (Hoje) ---------- */
 .hour .slot { position: relative; display: block; min-width: 0; }
 .hour .slot input { padding-right: 30px; }
+.move-grip { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 100%; width: 22px; font-size: 20px; z-index: 1; }
+.hour .slot.has-move input { padding-left: 22px; }
+.hour .slot.moving { opacity: .45; }
+.hour .move-target, .hour .move-target input { background-color: color-mix(in srgb, var(--pen) 22%, transparent) !important; box-shadow: inset 0 -2px 0 var(--pen); }
 .span-grip { position: absolute; right: 0; top: 50%; transform: translateY(-50%); height: 100%; opacity: .55; }
 .hour .slot:hover .span-grip, .hour .slot:focus-within .span-grip { opacity: 1; }
 @media (hover: none) { .span-grip { opacity: .8; } }
