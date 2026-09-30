@@ -114,7 +114,8 @@ textarea.ruled {
 
 /* ---------- itens das anotações: mover e urgência ---------- */
 .task.nitem { grid-template-columns: 1fr 28px 26px; -webkit-touch-callout: none; }
-.nitem .ntext input[readonly] { cursor: pointer; -webkit-user-select: none; user-select: none; }
+.nitem .ntext input[readonly] { cursor: pointer; -webkit-user-select: none; user-select: none; pointer-events: none; }
+.task.nitem { -webkit-user-select: none; user-select: none; cursor: pointer; }
 .nitem .ntext input:not([readonly]) { background: var(--band); }
 .nitem .ntext { display: flex; align-items: center; min-width: 0; }
 .nitem .urg { color: var(--hol); font-weight: 800; font-size: 16px; padding: 0 2px 0 4px; }
@@ -124,7 +125,7 @@ textarea.ruled {
   color: var(--muted); font-weight: 800; font-size: 14px; line-height: 1; padding: 0;
 }
 .urg-btn.on { background: var(--hol); border-color: var(--hol); color: #fff; }
-.nitem.dragging { background: var(--band); box-shadow: 0 6px 18px rgba(0,0,0,.18); position: relative; z-index: 2; }
+.nitem.dragging { background: var(--band); box-shadow: 0 6px 18px rgba(0,0,0,.25); position: relative; z-index: 2; transition: none; will-change: transform; }
 
 /* ---------- aniversários e datas anuais ---------- */
 .mrow .tags { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
