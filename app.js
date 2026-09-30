@@ -206,6 +206,43 @@ function hoursHtml(model) {
   </div>`).join('');
 }
 
+// arrastar a alça ⇕ para esticar/encolher o horário
+app.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip="slot"]');
+  if (!grip) return;
+  e.preventDefault();
+  const start = +grip.dataset.slot;
+  const model = view.model;
+  // limite: não passa por cima de outro horário já escrito
+  let max = SLOTS.length - start;
+  for (let k = start + 1; k < SLOTS.length; k++) {
+    if ((model.hours[SLOTS[k]] || '').trim()) { max = k - start; break; }
+  }
+  grip.setPointerCapture(e.pointerId);
+  const rows = [...app.querySelectorAll('.hours [data-slot]')];
+  let n = model.spans?.[SLOTS[start]] || 1;
+  const preview = () => rows.forEach(r => {
+    const k = +r.dataset.slot;
+    r.classList.toggle('span-preview', k > start && k < start + n);
+  });
+  const move = ev => {
+    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY >= b.top && ev.clientY < b.bottom; });
+    if (!hit) return;
+    n = Math.min(max, Math.max(1, +hit.dataset.slot - start + 1));
+    preview();
+  };
+  const end = () => {
+    grip.removeEventListener('pointermove', move);
+    model.spans ||= {};
+    if (n > 1) model.spans[SLOTS[start]] = n; else delete model.spans[SLOTS[start]];
+    store.set(view.docId, model);
+    rerender();
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', end, { once: true });
+  grip.addEventListener('pointercancel', end, { once: true });
+});
+
 // Hoje: segurar um afazer sem mexer o dedo e arrastar para outra linha.
 // Afazer solto em cima de outro afazer: troca os dois. Toque rápido no afazer: edita o texto.
 const HOLD_MS = 350; // tempo segurando o dedo parado para começar a arrastar
