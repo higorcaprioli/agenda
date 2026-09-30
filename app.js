@@ -173,14 +173,14 @@ function slotInputHtml(model, i, cover) {
   const n = cover.filter(o => o === i).length;
   const range = n > 1 ? `<span class="span-range">${slotTime(i)} – ${slotTime(i + n)}</span>` : '';
   const grip = text.trim() ? `<span class="grip span-grip" data-grip="slot" data-slot="${i}" title="Arraste para baixo para ocupar mais horários">⇕</span>` : '';
-  const mover = text.trim() ? `<span class="grip move-grip" data-grip="move" data-slot="${i}" title="Segure e arraste para mudar de horário">•</span>` : '';
-  return `<span class="slot ${n > 1 ? 'span-start' : ''} ${mover ? 'has-move' : ''}" data-slot="${i}">${mover}<input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
+  return `<span class="slot ${n > 1 ? 'span-start' : ''} ${text.trim() ? 'filled' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
 }
 
 // lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje, uma por hora a partir
 // das 9h (9, 10, 11, 12...; depois das 22h volta às 9h), todo dia, até serem marcadas como
-// feitas ou excluídas (nada é gravado nos dias). Arrastando o ponto •, o lembrete fica fixo
-// naquele horário (item.hour, salvo na anotação); os outros pulam os horários já fixados.
+// feitas ou excluídas (nada é gravado nos dias). Segurando e arrastando, o lembrete fica fixo
+// naquela linha (item.hour: 10 = 10:00, 10.5 = 10:30, salvo na anotação); os outros pulam
+// as horas já fixadas.
 const REM_HOURS = HOURS.filter(h => h >= 9);
 function urgentReminders() {
   const byHour = {};
@@ -190,18 +190,18 @@ function urgentReminders() {
     if (!it.urgent || it.done || !it.text?.trim()) continue;
     list.push({ ...it, cat: c.title });
   }
-  const fixed = list.filter(it => HOURS.includes(it.hour));
+  const isRemHour = h => typeof h === 'number' && h >= HOURS[0] && h < HOURS[HOURS.length - 1] + 1 && (h * 2) % 1 === 0;
+  const fixed = list.filter(it => isRemHour(it.hour));
   fixed.forEach(it => (byHour[it.hour] ||= []).push(it));
   const taken = new Set(fixed.map(it => it.hour));
   const free = REM_HOURS.filter(h => !taken.has(h));
   const pool = free.length ? free : REM_HOURS;
-  list.filter(it => !HOURS.includes(it.hour)).forEach((it, k) => (byHour[pool[k % pool.length]] ||= []).push(it));
+  list.filter(it => !isRemHour(it.hour)).forEach((it, k) => (byHour[pool[k % pool.length]] ||= []).push(it));
   return byHour;
 }
 
 function remindersHtml(list = []) {
-  return list.length ? `<ul class="rem">${list.map(it => `<li>
-    <span class="grip move-grip" data-grip="rem" data-id="${esc(it.id)}" title="Segure e arraste para mudar de horário">•</span>
+  return list.length ? `<ul class="rem">${list.map(it => `<li data-id="${esc(it.id)}" title="Segure e arraste para mudar de horário">
     <input type="checkbox" data-action="rem-done" data-id="${esc(it.id)}" aria-label="Marcar como feito">
     <b class="urg">!</b><span class="rem-text">${esc(it.text)}</span>${it.cat?.trim() ? `<a class="rem-cat" href="#/notas">${esc(it.cat)}</a>` : ''}
   </li>`).join('')}</ul>` : '';
@@ -214,6 +214,7 @@ function hoursHtml(model, rem = {}) {
     ${slotInputHtml(model, k * 2, cover)}
     ${remindersHtml(rem[hr])}
     ${slotInputHtml(model, k * 2 + 1, cover)}
+    ${remindersHtml(rem[hr + 0.5])}
   </div>`).join('');
 }
 
@@ -254,88 +255,112 @@ app.addEventListener('pointerdown', e => {
   grip.addEventListener('pointercancel', end, { once: true });
 });
 
-// arrastar o ponto • para mudar o afazer de horário (em cima de outro afazer: troca os dois)
-app.addEventListener('pointerdown', e => {
-  const grip = e.target.closest('[data-grip="move"]');
-  if (!grip) return;
-  e.preventDefault();
-  const from = +grip.dataset.slot;
-  const model = view.model;
-  const rows = [...app.querySelectorAll('.hours [data-slot]')].filter(r => !r.closest('.slot') || r.classList.contains('slot'));
-  const src = grip.closest('.slot');
-  src.classList.add('moving');
-  let to = from, lastY = e.clientY, run = true;
-  const mark = () => rows.forEach(r => r.classList.toggle('move-target', +r.dataset.slot === to && to !== from));
-  const pick = y => {
-    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return y >= b.top && y < b.bottom; });
-    if (hit) { to = +hit.dataset.slot; mark(); }
+// Hoje: segurar um afazer (ou lembrete vermelho) sem mexer o dedo e arrastar para outra linha.
+// Afazer solto em cima de outro afazer: troca os dois. Toque rápido no afazer: edita o texto.
+const HOLD_MS = 350; // tempo segurando o dedo parado para começar a arrastar
+let dayDragActive = false, dayDragged = false;
+function dayDragStart(src, x0, y0, bindMove) {
+  const rem = src.matches('.rem li');
+  const from = rem ? null : +src.dataset.slot;
+  const rows = [...app.querySelectorAll('.hours .slot, .hours input.covered')];
+  let active = false, lastY = y0, to = null;
+  const pick = () => {
+    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return lastY >= b.top && lastY < b.bottom; });
+    if (!hit) return;
+    to = +hit.dataset.slot;
+    rows.forEach(r => r.classList.toggle('move-target', r === hit && (rem || to !== from)));
   };
-  // rola a tela sozinho quando o dedo chega perto do topo ou do pé
   const auto = () => {
-    if (!run) return;
+    if (!active) return;
     const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
     const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
-    const d = lastY < top ? -10 : lastY > bottom ? 10 : 0;
-    if (d) { scrollBy(0, d); pick(lastY); }
+    const d = lastY < top ? -8 : lastY > bottom ? 8 : 0;
+    if (d) { scrollBy(0, d); pick(); }
     requestAnimationFrame(auto);
   };
-  requestAnimationFrame(auto);
-  const move = ev => { if (ev.pointerId !== e.pointerId) return; lastY = ev.clientY; pick(lastY); };
-  const end = ev => {
-    if (ev.pointerId !== e.pointerId) return;
-    run = false;
-    removeEventListener('pointermove', move);
-    removeEventListener('pointerup', end);
-    removeEventListener('pointercancel', end);
-    if (ev.type === 'pointerup' && to !== from) moveSlot(model, from, to);
-    rerender();
-  };
-  addEventListener('pointermove', move);
-  addEventListener('pointerup', end);
-  addEventListener('pointercancel', end);
+  const timer = setTimeout(() => {
+    active = dayDragActive = dayDragged = true;
+    src.classList.add('moving');
+    navigator.vibrate?.(25);
+    getSelection()?.removeAllRanges();
+    pick();
+    requestAnimationFrame(auto);
+  }, HOLD_MS);
+  const unbind = bindMove({
+    move(x, y, ev) {
+      lastY = y;
+      if (!active) {
+        if (Math.hypot(x - x0, y - y0) > 10) { clearTimeout(timer); unbind(); } // é rolagem
+        return;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      pick();
+    },
+    end(cancelled) {
+      clearTimeout(timer); unbind();
+      if (!active) return;
+      active = dayDragActive = false;
+      if (!cancelled && to !== null) {
+        if (rem) {
+          const doc = load(NOTES_ID, null);
+          const it = doc?.cats.flatMap(c => c.items).find(x => x.id === src.dataset.id);
+          if (it) { it.hour = HOURS[0] + to / 2; store.set(NOTES_ID, doc); }
+        } else if (to !== from) moveSlot(view.model, from, to);
+      }
+      rerender();
+      setTimeout(() => { dayDragged = false; }, 60);
+    },
+  });
+}
+const dayDragTarget = t => {
+  if (!t.closest?.('.hours') || t.closest('[data-grip], [data-action], a')) return null;
+  const li = t.closest('.rem li');
+  if (li) return li;
+  const slot = t.closest('.slot.filled');
+  return slot && document.activeElement !== slot.querySelector('input') ? slot : null;
+};
+app.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  const src = dayDragTarget(e.target);
+  if (!src) return;
+  const t0 = e.touches[0];
+  dayDragStart(src, t0.clientX, t0.clientY, h => {
+    const move = ev => { const t = ev.touches[0]; if (t) h.move(t.clientX, t.clientY, ev); };
+    const end = ev => h.end(ev.type === 'touchcancel');
+    addEventListener('touchmove', move, { passive: false });
+    addEventListener('touchend', end);
+    addEventListener('touchcancel', end);
+    return () => {
+      removeEventListener('touchmove', move, { passive: false });
+      removeEventListener('touchend', end);
+      removeEventListener('touchcancel', end);
+    };
+  });
+}, { passive: true });
+app.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const src = dayDragTarget(e.target);
+  if (!src) return;
+  dayDragStart(src, e.clientX, e.clientY, h => {
+    const move = ev => h.move(ev.clientX, ev.clientY, ev);
+    const end = () => h.end(false);
+    addEventListener('mousemove', move);
+    addEventListener('mouseup', end);
+    return () => { removeEventListener('mousemove', move); removeEventListener('mouseup', end); };
+  });
 });
-
-// arrastar o ponto • de um lembrete (anotação urgente) para outra hora
-app.addEventListener('pointerdown', e => {
-  const grip = e.target.closest('[data-grip="rem"]');
-  if (!grip) return;
-  e.preventDefault();
-  const id = grip.dataset.id;
-  const rows = [...app.querySelectorAll('.hours .hour')];
-  const li = grip.closest('li');
-  li.classList.add('moving');
-  const fromRow = grip.closest('.hour');
-  let row = fromRow, lastY = e.clientY, run = true;
-  const pick = y => {
-    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return y >= b.top && y < b.bottom; });
-    if (hit) { row = hit; rows.forEach(r => r.classList.toggle('move-target', r === row && row !== fromRow)); }
-  };
-  const auto = () => {
-    if (!run) return;
-    const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
-    const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
-    const d = lastY < top ? -10 : lastY > bottom ? 10 : 0;
-    if (d) { scrollBy(0, d); pick(lastY); }
-    requestAnimationFrame(auto);
-  };
-  requestAnimationFrame(auto);
-  const move = ev => { if (ev.pointerId !== e.pointerId) return; lastY = ev.clientY; pick(lastY); };
-  const end = ev => {
-    if (ev.pointerId !== e.pointerId) return;
-    run = false;
-    removeEventListener('pointermove', move);
-    removeEventListener('pointerup', end);
-    removeEventListener('pointercancel', end);
-    if (ev.type === 'pointerup' && row !== fromRow) {
-      const doc = load(NOTES_ID, null);
-      const it = doc?.cats.flatMap(c => c.items).find(x => x.id === id);
-      if (it) { it.hour = HOURS[rows.indexOf(row)]; store.set(NOTES_ID, doc); }
-    }
-    rerender();
-  };
-  addEventListener('pointermove', move);
-  addEventListener('pointerup', end);
-  addEventListener('pointercancel', end);
+app.addEventListener('touchmove', e => { if (dayDragActive && e.cancelable) e.preventDefault(); }, { passive: false });
+app.addEventListener('contextmenu', e => { if (e.target.closest('.hours .slot.filled, .rem li')) e.preventDefault(); });
+// toque rápido num afazer escrito → edita (o campo só recebe toque direto quando já está em edição)
+app.addEventListener('click', e => {
+  const slot = e.target.closest('.hours .slot.filled');
+  if (!slot || e.target.closest('[data-grip]')) return;
+  if (dayDragged) { dayDragged = false; return; }
+  const inp = slot.querySelector('input');
+  if (document.activeElement === inp) return;
+  inp.focus();
+  const n = inp.value.length;
+  inp.setSelectionRange(n, n);
 });
 
 function moveSlot(model, from, to) {
@@ -777,7 +802,6 @@ app.addEventListener('dblclick', e => {
 // segurar o item (sem mexer o dedo) e arrastar para reordenar dentro da lista.
 // Se o dedo se mexer antes, é rolagem normal da tela. No celular usa eventos de toque
 // (mais confiáveis que pointer no Android); no PC, o mouse.
-const HOLD_MS = 350;
 let noteDragged = false, noteDragActive = false;
 function noteDragStart(li, x0, y0, bindMove) {
   const ul = li.parentElement;
@@ -1290,6 +1314,7 @@ addEventListener('touchend', e => {
   swipe = null;
   if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
   if (getSelection()?.toString()) return; // estava selecionando texto
+  if (dayDragged) return; // estava arrastando um afazer
   const link = app.querySelector(`.toolbar a[aria-label="${dx < 0 ? 'Próximo' : 'Anterior'}"]`);
   if (!link) return;
   swipeDir = dx < 0 ? 1 : -1;
