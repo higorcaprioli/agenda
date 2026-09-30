@@ -179,21 +179,29 @@ function slotInputHtml(model, i, cover) {
 
 // lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje, uma por hora a partir
 // das 9h (9, 10, 11, 12...; depois das 22h volta às 9h), todo dia, até serem marcadas como
-// feitas ou excluídas (nada é gravado nos dias)
+// feitas ou excluídas (nada é gravado nos dias). Arrastando o ponto •, o lembrete fica fixo
+// naquele horário (item.hour, salvo na anotação); os outros pulam os horários já fixados.
 const REM_HOURS = HOURS.filter(h => h >= 9);
 function urgentReminders() {
   const byHour = {};
   const cats = store.get(NOTES_ID)?.cats || [];
-  let k = 0;
+  const list = [];
   for (const c of cats) for (const it of c.items || []) {
     if (!it.urgent || it.done || !it.text?.trim()) continue;
-    (byHour[REM_HOURS[k++ % REM_HOURS.length]] ||= []).push({ ...it, cat: c.title });
+    list.push({ ...it, cat: c.title });
   }
+  const fixed = list.filter(it => HOURS.includes(it.hour));
+  fixed.forEach(it => (byHour[it.hour] ||= []).push(it));
+  const taken = new Set(fixed.map(it => it.hour));
+  const free = REM_HOURS.filter(h => !taken.has(h));
+  const pool = free.length ? free : REM_HOURS;
+  list.filter(it => !HOURS.includes(it.hour)).forEach((it, k) => (byHour[pool[k % pool.length]] ||= []).push(it));
   return byHour;
 }
 
 function remindersHtml(list = []) {
   return list.length ? `<ul class="rem">${list.map(it => `<li>
+    <span class="grip move-grip" data-grip="rem" data-id="${esc(it.id)}" title="Segure e arraste para mudar de horário">•</span>
     <input type="checkbox" data-action="rem-done" data-id="${esc(it.id)}" aria-label="Marcar como feito">
     <b class="urg">!</b><span class="rem-text">${esc(it.text)}</span>${it.cat?.trim() ? `<a class="rem-cat" href="#/notas">${esc(it.cat)}</a>` : ''}
   </li>`).join('')}</ul>` : '';
@@ -280,6 +288,49 @@ app.addEventListener('pointerdown', e => {
     removeEventListener('pointerup', end);
     removeEventListener('pointercancel', end);
     if (ev.type === 'pointerup' && to !== from) moveSlot(model, from, to);
+    rerender();
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+});
+
+// arrastar o ponto • de um lembrete (anotação urgente) para outra hora
+app.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip="rem"]');
+  if (!grip) return;
+  e.preventDefault();
+  const id = grip.dataset.id;
+  const rows = [...app.querySelectorAll('.hours .hour')];
+  const li = grip.closest('li');
+  li.classList.add('moving');
+  const fromRow = grip.closest('.hour');
+  let row = fromRow, lastY = e.clientY, run = true;
+  const pick = y => {
+    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return y >= b.top && y < b.bottom; });
+    if (hit) { row = hit; rows.forEach(r => r.classList.toggle('move-target', r === row && row !== fromRow)); }
+  };
+  const auto = () => {
+    if (!run) return;
+    const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
+    const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
+    const d = lastY < top ? -10 : lastY > bottom ? 10 : 0;
+    if (d) { scrollBy(0, d); pick(lastY); }
+    requestAnimationFrame(auto);
+  };
+  requestAnimationFrame(auto);
+  const move = ev => { if (ev.pointerId !== e.pointerId) return; lastY = ev.clientY; pick(lastY); };
+  const end = ev => {
+    if (ev.pointerId !== e.pointerId) return;
+    run = false;
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', end);
+    removeEventListener('pointercancel', end);
+    if (ev.type === 'pointerup' && row !== fromRow) {
+      const doc = load(NOTES_ID, null);
+      const it = doc?.cats.flatMap(c => c.items).find(x => x.id === id);
+      if (it) { it.hour = HOURS[rows.indexOf(row)]; store.set(NOTES_ID, doc); }
+    }
     rerender();
   };
   addEventListener('pointermove', move);

@@ -340,6 +340,9 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
 .hour:has(.rem) .h { grid-row: span 3; }
 .rem li { display: flex; align-items: center; gap: 6px; min-height: 30px; font-size: 14px; color: var(--hol); }
 .rem li input[type="checkbox"] { flex: none; }
+.rem .move-grip { position: static; transform: none; flex: none; width: 18px; height: 30px; }
+.rem li.moving { opacity: .45; }
+.hour.move-target { background-color: color-mix(in srgb, var(--pen) 14%, transparent); }
 .rem .urg { color: var(--hol); font-weight: 800; }
 .rem .rem-text { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .rem .rem-cat { flex: none; font-size: 11px; color: var(--muted); text-decoration: none; }
