@@ -652,8 +652,7 @@ function renderNotes() {
       <ul class="nc-list">
         ${c.items.map((it, j) => `<li class="task nitem ${it.done ? 'done' : ''} ${it.urgent ? 'urgent' : ''}" data-j="${j}">
           <span class="grip" data-grip="note" aria-label="Arrastar para mover" title="Segure e arraste para mover">⠿</span>
-          <input type="checkbox" data-path="cats.${i}.items.${j}.done" ${it.done ? 'checked' : ''} aria-label="Feito">
-          <span class="ntext">${it.urgent ? '<b class="urg" aria-label="Urgente">!</b>' : ''}<input type="text" data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}"></span>
+          <span class="ntext">${it.urgent ? '<b class="urg" aria-label="Urgente">!</b>' : ''}<input type="text" readonly data-path="cats.${i}.items.${j}.text" value="${esc(it.text)}" aria-label="Item ${j + 1}${it.done ? ' (feito)' : ''}. Toque para riscar, dois toques para editar"></span>
           <button class="urg-btn ${it.urgent ? 'on' : ''}" data-action="urgent" data-c="${i}" data-j="${j}" aria-pressed="${!!it.urgent}" title="${it.urgent ? 'Tirar urgência' : 'Marcar como urgente (sobe para o topo)'}">!</button>
           <button class="x" data-action="del-item" data-c="${i}" data-j="${j}" aria-label="Remover item">×</button>
         </li>`).join('')}
@@ -670,6 +669,40 @@ function renderNotes() {
   </article>`;
   document.title = 'Anotações · AGENDA HC';
 }
+
+// item das anotações: 1 toque risca/desrisca · 2 toques seguidos abrem para editar o texto
+let tapTimer = null, tapItem = null;
+app.addEventListener('click', e => {
+  const li = e.target.closest('.nitem');
+  if (!li || e.target.closest('[data-action], .grip')) return;
+  const inp = li.querySelector('.ntext input');
+  if (!inp.readOnly) return; // já está editando
+  e.preventDefault();
+  if (tapTimer && tapItem === li) {
+    clearTimeout(tapTimer); tapTimer = tapItem = null;
+    inp.readOnly = false;
+    inp.focus();
+    const n = inp.value.length;
+    inp.setSelectionRange(n, n);
+    return;
+  }
+  clearTimeout(tapTimer);
+  tapItem = li;
+  tapTimer = setTimeout(() => {
+    tapTimer = tapItem = null;
+    inp.blur();
+    const c = +li.closest('.note-cat').dataset.c, j = +li.dataset.j;
+    const it = view.model.cats[c]?.items[j];
+    if (!it) return;
+    it.done = !it.done;
+    store.set(view.docId, view.model);
+    rerender();
+  }, 300);
+});
+// terminou de editar → volta a ser só leitura
+app.addEventListener('focusout', e => {
+  if (e.target.matches?.('.nitem .ntext input')) e.target.readOnly = true;
+});
 
 function afterNoteInput(el) {
   const sec = el.closest('.note-cat');
@@ -1006,7 +1039,7 @@ function paintTabs(active) {
   }
 }
 
-const isEditing = () => app.contains(document.activeElement) && document.activeElement.matches('input[type=text], textarea');
+const isEditing = () => app.contains(document.activeElement) && document.activeElement.matches('input[type=text]:not([readonly]), textarea');
 
 // ---------- eventos ----------
 function bind(el) {
