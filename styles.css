@@ -226,6 +226,12 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
 .dot.err { background: #ff6b6b; }
 .dot.busy { background: #6aa8ff; animation: pulse 1s ease-in-out infinite alternate; }
 @keyframes pulse { to { opacity: .35; } }
+/* troca de dia/mês arrastando o dedo */
+@keyframes enter-next { from { opacity: .3; transform: translateX(-40px); } }
+@keyframes enter-prev { from { opacity: .3; transform: translateX(40px); } }
+.sheet.enter-next { animation: enter-next .22s ease-out; }
+.sheet.enter-prev { animation: enter-prev .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .sheet.enter-next, .sheet.enter-prev { animation: none; } }
 
 /* ---------- aviso Google Agenda + painel da conta ---------- */
 .gbar {

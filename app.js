@@ -1049,7 +1049,41 @@ function focusToday() {
   scrollTo(0, Math.max(0, Math.min(want, max)));
 }
 
-addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); });
+addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); animateSwipe(); });
+
+// arrastar o dedo na horizontal (Hoje/dia e Mês): para a direita → próximo, para a esquerda → anterior
+let swipe = null, swipeDir = 0;
+addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const { v } = parseRoute();
+  swipe = null;
+  if (e.touches.length !== 1 || !['hoje', 'dia', 'mes'].includes(v)) return;
+  if (document.querySelector('dialog[open]') || e.target.closest('[data-grip]')) return;
+  if (t.clientX < 20 || t.clientX > innerWidth - 20) return; // bordas: gesto de voltar do Android
+  swipe = { x: t.clientX, y: t.clientY, at: Date.now() };
+}, { passive: true });
+addEventListener('touchend', e => {
+  if (!swipe) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+  const quick = Date.now() - swipe.at < 800;
+  swipe = null;
+  if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+  if (getSelection()?.toString()) return; // estava selecionando texto
+  const link = app.querySelector(`.toolbar a[aria-label="${dx > 0 ? 'Próximo' : 'Anterior'}"]`);
+  if (!link) return;
+  swipeDir = dx > 0 ? 1 : -1;
+  document.activeElement?.blur?.();
+  location.hash = link.getAttribute('href');
+}, { passive: true });
+addEventListener('touchcancel', () => { swipe = null; });
+
+function animateSwipe() {
+  if (!swipeDir) return;
+  const sheet = app.querySelector('.sheet');
+  sheet?.classList.add(swipeDir > 0 ? 'enter-next' : 'enter-prev');
+  swipeDir = 0;
+}
 // tocar em Ano/Mês/Hoje de novo, já estando nela, também leva a hoje
 for (const t of ['ano', 'mes', 'hoje']) {
   document.querySelector(`#tabs a[data-tab="${t}"]`)?.addEventListener('click', e => {
