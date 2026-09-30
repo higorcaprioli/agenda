@@ -1051,7 +1051,7 @@ function focusToday() {
 
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); focusToday(); animateSwipe(); });
 
-// arrastar o dedo na horizontal (Hoje/dia e Mês): para a direita → próximo, para a esquerda → anterior
+// arrastar o dedo na horizontal (Hoje/dia e Mês): para a esquerda → próximo, para a direita → anterior (como virar página)
 let swipe = null, swipeDir = 0;
 addEventListener('touchstart', e => {
   const t = e.touches[0];
@@ -1070,9 +1070,9 @@ addEventListener('touchend', e => {
   swipe = null;
   if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
   if (getSelection()?.toString()) return; // estava selecionando texto
-  const link = app.querySelector(`.toolbar a[aria-label="${dx > 0 ? 'Próximo' : 'Anterior'}"]`);
+  const link = app.querySelector(`.toolbar a[aria-label="${dx < 0 ? 'Próximo' : 'Anterior'}"]`);
   if (!link) return;
-  swipeDir = dx > 0 ? 1 : -1;
+  swipeDir = dx < 0 ? 1 : -1;
   document.activeElement?.blur?.();
   location.hash = link.getAttribute('href');
 }, { passive: true });
