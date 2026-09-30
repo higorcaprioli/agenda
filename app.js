@@ -120,7 +120,7 @@ function renderDay(d, isTodayRoute) {
       <button class="hl-btn ${model.hl ? 'on' : ''}" data-action="hl" aria-pressed="${!!model.hl}" title="Destacar este dia no calendário anual">${ICON.marker}<span>Destacar</span></button>
     </div>
     <div class="day-grid">
-      <section class="hours" aria-label="Horários">${hoursHtml(model, isToday ? urgentReminders() : {})}</section>
+      <section class="hours" aria-label="Horários">${isToday ? remindersHtml(urgentReminders()) : ''}${hoursHtml(model)}</section>
       <section class="tasks" aria-label="Tarefas">
         <h3 class="col-title">Tarefas <span class="tasks-count">${model.tasks.length ? `${done}/${model.tasks.length}` : ''}</span></h3>
         <ul class="task-list">
@@ -176,99 +176,49 @@ function slotInputHtml(model, i, cover) {
   return `<span class="slot ${n > 1 ? 'span-start' : ''} ${text.trim() ? 'filled' : ''}" data-slot="${i}"><input type="text" class="${half}" data-path="hours.${s}" value="${esc(text)}" aria-label="${label}">${range}${grip}</span>`;
 }
 
-// lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje, uma por hora a partir
-// das 9h (9, 10, 11, 12...; depois das 22h volta às 9h), todo dia, até serem marcadas como
-// feitas ou excluídas (nada é gravado nos dias). Segurando e arrastando, o lembrete fica fixo
-// naquela linha (item.hour: 10 = 10:00, 10.5 = 10:30, salvo na anotação); os outros pulam
-// as horas já fixadas.
-const REM_HOURS = HOURS.filter(h => h >= 9);
+// lembretes: anotações urgentes (!) ainda não feitas aparecem em Hoje num quadro próprio,
+// acima dos horários, na mesma ordem das Anotações; todo dia, até serem marcadas como feitas
+// ou excluídas (nada é gravado nos dias)
 function urgentReminders() {
-  const byHour = {};
-  const cats = store.get(NOTES_ID)?.cats || [];
   const list = [];
-  for (const c of cats) for (const it of c.items || []) {
-    if (!it.urgent || it.done || !it.text?.trim()) continue;
-    list.push({ ...it, cat: c.title });
+  for (const c of store.get(NOTES_ID)?.cats || []) for (const it of c.items || []) {
+    if (it.urgent && !it.done && it.text?.trim()) list.push({ ...it, cat: c.title });
   }
-  const isRemHour = h => typeof h === 'number' && h >= HOURS[0] && h < HOURS[HOURS.length - 1] + 1 && (h * 2) % 1 === 0;
-  const fixed = list.filter(it => isRemHour(it.hour));
-  fixed.forEach(it => (byHour[it.hour] ||= []).push(it));
-  const taken = new Set(fixed.map(it => it.hour));
-  const free = REM_HOURS.filter(h => !taken.has(h));
-  const pool = free.length ? free : REM_HOURS;
-  list.filter(it => !isRemHour(it.hour)).forEach((it, k) => (byHour[pool[k % pool.length]] ||= []).push(it));
-  return byHour;
+  return list;
 }
 
-function remindersHtml(list = []) {
-  return list.length ? `<ul class="rem">${list.map(it => `<li data-id="${esc(it.id)}" title="Segure e arraste para mudar de horário">
-    <input type="checkbox" data-action="rem-done" data-id="${esc(it.id)}" aria-label="Marcar como feito">
-    <b class="urg">!</b><span class="rem-text">${esc(it.text)}</span>${it.cat?.trim() ? `<a class="rem-cat" href="#/notas">${esc(it.cat)}</a>` : ''}
-  </li>`).join('')}</ul>` : '';
+function remindersHtml(list) {
+  return list.length ? `<section class="rem-box" aria-label="Lembretes urgentes">
+    <h3 class="rem-title"><b class="urg">!</b> Urgentes <span>${list.length}</span></h3>
+    <ul class="rem">${list.map(it => `<li>
+      <input type="checkbox" data-action="rem-done" data-id="${esc(it.id)}" aria-label="Marcar como feito">
+      <span class="rem-text">${esc(it.text)}</span>${it.cat?.trim() ? `<a class="rem-cat" href="#/notas">${esc(it.cat)}</a>` : ''}
+    </li>`).join('')}</ul>
+  </section>` : '';
 }
 
-function hoursHtml(model, rem = {}) {
+function hoursHtml(model) {
   const cover = spanMap(model);
   return HOURS.map((hr, k) => `<div class="hour">
     <span class="h">${hr}</span>
     ${slotInputHtml(model, k * 2, cover)}
-    ${remindersHtml(rem[hr])}
     ${slotInputHtml(model, k * 2 + 1, cover)}
-    ${remindersHtml(rem[hr + 0.5])}
   </div>`).join('');
 }
 
-// arrastar a alça ⇕ para esticar/encolher o horário
-app.addEventListener('pointerdown', e => {
-  const grip = e.target.closest('[data-grip="slot"]');
-  if (!grip) return;
-  e.preventDefault();
-  const start = +grip.dataset.slot;
-  const model = view.model;
-  // limite: não passa por cima de outro horário já escrito
-  let max = SLOTS.length - start;
-  for (let k = start + 1; k < SLOTS.length; k++) {
-    if ((model.hours[SLOTS[k]] || '').trim()) { max = k - start; break; }
-  }
-  grip.setPointerCapture(e.pointerId);
-  const rows = [...app.querySelectorAll('.hours [data-slot]')];
-  let n = model.spans?.[SLOTS[start]] || 1;
-  const preview = () => rows.forEach(r => {
-    const k = +r.dataset.slot;
-    r.classList.toggle('span-preview', k > start && k < start + n);
-  });
-  const move = ev => {
-    const hit = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY >= b.top && ev.clientY < b.bottom; });
-    if (!hit) return;
-    n = Math.min(max, Math.max(1, +hit.dataset.slot - start + 1));
-    preview();
-  };
-  const end = () => {
-    grip.removeEventListener('pointermove', move);
-    model.spans ||= {};
-    if (n > 1) model.spans[SLOTS[start]] = n; else delete model.spans[SLOTS[start]];
-    store.set(view.docId, model);
-    rerender();
-  };
-  grip.addEventListener('pointermove', move);
-  grip.addEventListener('pointerup', end, { once: true });
-  grip.addEventListener('pointercancel', end, { once: true });
-});
-
-// Hoje: segurar um afazer (ou lembrete vermelho) sem mexer o dedo e arrastar para outra linha.
+// Hoje: segurar um afazer sem mexer o dedo e arrastar para outra linha.
 // Afazer solto em cima de outro afazer: troca os dois. Toque rápido no afazer: edita o texto.
 const HOLD_MS = 350; // tempo segurando o dedo parado para começar a arrastar
 let dayDragActive = false, dayDragged = false;
 function dayDragStart(src, x0, y0, bindMove) {
-  const rem = src.matches('.rem li');
-  const from = rem ? null : +src.dataset.slot;
+  const from = +src.dataset.slot;
   const rows = [...app.querySelectorAll('.hours .slot, .hours input.covered')];
   let active = false, lastY = y0, to = null;
   const pick = () => {
     const hit = rows.find(r => { const b = r.getBoundingClientRect(); return lastY >= b.top && lastY < b.bottom; });
     if (!hit) return;
     to = +hit.dataset.slot;
-    rows.forEach(r => r.classList.toggle('move-target', r === hit && (rem || to !== from)));
+    rows.forEach(r => r.classList.toggle('move-target', r === hit && to !== from));
   };
   const auto = () => {
     if (!active) return;
@@ -301,11 +251,7 @@ function dayDragStart(src, x0, y0, bindMove) {
       if (!active) return;
       active = dayDragActive = false;
       if (!cancelled && to !== null) {
-        if (rem) {
-          const doc = load(NOTES_ID, null);
-          const it = doc?.cats.flatMap(c => c.items).find(x => x.id === src.dataset.id);
-          if (it) { it.hour = HOURS[0] + to / 2; store.set(NOTES_ID, doc); }
-        } else if (to !== from) moveSlot(view.model, from, to);
+        if (to !== from) moveSlot(view.model, from, to);
       }
       rerender();
       setTimeout(() => { dayDragged = false; }, 60);
@@ -314,8 +260,6 @@ function dayDragStart(src, x0, y0, bindMove) {
 }
 const dayDragTarget = t => {
   if (!t.closest?.('.hours') || t.closest('[data-grip], [data-action], a')) return null;
-  const li = t.closest('.rem li');
-  if (li) return li;
   const slot = t.closest('.slot.filled');
   return slot && document.activeElement !== slot.querySelector('input') ? slot : null;
 };
@@ -350,7 +294,7 @@ app.addEventListener('mousedown', e => {
   });
 });
 app.addEventListener('touchmove', e => { if (dayDragActive && e.cancelable) e.preventDefault(); }, { passive: false });
-app.addEventListener('contextmenu', e => { if (e.target.closest('.hours .slot.filled, .rem li')) e.preventDefault(); });
+app.addEventListener('contextmenu', e => { if (e.target.closest('.hours .slot.filled')) e.preventDefault(); });
 // toque rápido num afazer escrito → edita (o campo só recebe toque direto quando já está em edição)
 app.addEventListener('click', e => {
   const slot = e.target.closest('.hours .slot.filled');
