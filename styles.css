@@ -334,7 +334,7 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
 .hl-btn.on { background: var(--hl); border-color: var(--hl); color: var(--ink); }
 
 .day-grid { display: grid; grid-template-columns: 1.65fr 1fr; gap: 24px; flex: 1; }
-.hours { border-top: 1px solid var(--band-2); }
+.hours { border-top: 1px solid var(--band-2); overflow-x: clip; }
 .hour { display: grid; grid-template-columns: 26px 1fr; }
 .hour .h { grid-row: span 2; font-size: 11px; color: var(--muted); padding-top: 5px; }
 .hour input { height: var(--line); border-bottom: 1px solid var(--rule); font-size: 14px; }
@@ -508,3 +508,20 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
   body { background: #fff; }
   .sheet { margin: 0; box-shadow: none; min-height: 297mm; }
 }
+
+/* ---------- arrastar afazer para o dia seguinte (Hoje) ---------- */
+.nd-hint {
+  position: fixed; right: 0; top: 50%; z-index: 30; transform: translate(100%, -50%);
+  padding: 14px 18px; border-radius: 12px 0 0 12px; background: var(--pen); color: var(--paper);
+  font: 700 15px/1 var(--sans, system-ui); letter-spacing: .02em; box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  transition: transform .18s ease-out; pointer-events: none;
+}
+.nd-hint.on { transform: translate(0, -50%); }
+.hour .slot.to-next { opacity: .8; }
+.hour .slot.to-next input { background-color: color-mix(in srgb, var(--pen) 25%, transparent) !important; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 10px; background: var(--ink); color: var(--paper);
+  font-size: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.25); animation: toast-in .2s ease-out;
+}
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }

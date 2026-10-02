@@ -245,13 +245,18 @@ app.addEventListener('pointerdown', e => {
 
 // Hoje: segurar um afazer sem mexer o dedo e arrastar para outra linha.
 // Afazer solto em cima de outro afazer: troca os dois. Toque rápido no afazer: edita o texto.
+// Segurar e arrastar para a DIREITA (aparece "Next Day"): passa o afazer para o dia seguinte.
 const HOLD_MS = 350; // tempo segurando o dedo parado para começar a arrastar
 let dayDragActive = false, dayDragged = false;
 function dayDragStart(src, x0, y0, bindMove) {
   const from = +src.dataset.slot;
   const rows = [...app.querySelectorAll('.hours .slot, .hours input.covered')];
-  let active = false, lastY = y0, to = null;
+  let active = false, lastY = y0, to = null, nextDay = false;
+  const hint = document.createElement('div');
+  hint.className = 'nd-hint';
+  hint.textContent = 'Next Day →';
   const pick = () => {
+    if (nextDay) return;
     const hit = rows.find(r => { const b = r.getBoundingClientRect(); return lastY >= b.top && lastY < b.bottom; });
     if (!hit) return;
     to = +hit.dataset.slot;
@@ -262,12 +267,13 @@ function dayDragStart(src, x0, y0, bindMove) {
     const top = (document.querySelector('.appbar')?.offsetHeight || 0) + 40;
     const bottom = (document.getElementById('tabs')?.getBoundingClientRect().top ?? innerHeight) - 40;
     const d = lastY < top ? -8 : lastY > bottom ? 8 : 0;
-    if (d) { scrollBy(0, d); pick(); }
+    if (d && !nextDay) { scrollBy(0, d); pick(); }
     requestAnimationFrame(auto);
   };
   const timer = setTimeout(() => {
     active = dayDragActive = dayDragged = true;
     src.classList.add('moving');
+    document.body.append(hint);
     navigator.vibrate?.(25);
     getSelection()?.removeAllRanges();
     pick();
@@ -281,15 +287,26 @@ function dayDragStart(src, x0, y0, bindMove) {
         return;
       }
       if (ev.cancelable) ev.preventDefault();
+      // arrastou para a direita → modo "próximo dia"
+      const dx = Math.max(0, x - x0);
+      const on = dx > Math.min(110, innerWidth * 0.28);
+      if (on !== nextDay) {
+        nextDay = on;
+        hint.classList.toggle('on', on);
+        src.classList.toggle('to-next', on);
+        if (on) { rows.forEach(r => r.classList.remove('move-target')); navigator.vibrate?.(15); }
+      }
+      src.style.transform = dx > 12 ? `translateX(${Math.min(dx, innerWidth * 0.6)}px)` : '';
       pick();
     },
     end(cancelled) {
       clearTimeout(timer); unbind();
       if (!active) return;
       active = dayDragActive = false;
-      if (!cancelled && to !== null) {
-        if (to !== from) moveSlot(view.model, from, to);
-      }
+      hint.remove();
+      src.style.transform = '';
+      if (!cancelled && nextDay) moveToNextDay(from);
+      else if (!cancelled && to !== null && to !== from) moveSlot(view.model, from, to);
       rerender();
       setTimeout(() => { dayDragged = false; }, 60);
     },
@@ -343,6 +360,49 @@ app.addEventListener('click', e => {
   const n = inp.value.length;
   inp.setSelectionRange(n, n);
 });
+
+// passa o afazer do slot `from` (com a duração esticada) para o dia seguinte, no mesmo horário;
+// se lá estiver ocupado, vai para o próximo horário livre (ou o anterior, se não houver depois)
+function moveToNextDay(from) {
+  const model = view.model;
+  const s = SLOTS[from];
+  const text = model.hours[s];
+  if (!text?.trim()) return;
+  const n = model.spans?.[s] || 1;
+  const day = parseIso(view.docId.slice(4));
+  const next = addDays(day, 1);
+  const id = 'day:' + iso(next);
+  const doc = load(id, { hl: false, hours: {}, tasks: [], notes: '' });
+  doc.hours ||= {};
+  const cover = spanMap(doc);
+  const free = i => cover[i] === null || !(doc.hours[SLOTS[cover[i]]] || '').trim();
+  const order = [...SLOTS.keys()].filter(i => i >= from).concat([...SLOTS.keys()].filter(i => i < from).reverse());
+  const at = order.find(free);
+  if (at === undefined) { alert('O dia seguinte já está com todos os horários ocupados.'); return; }
+  const t = SLOTS[at];
+  doc.hours[t] = text;
+  // duração: só o que couber até o próximo afazer
+  let len = 1;
+  while (len < n && at + len < SLOTS.length && free(at + len)) len++;
+  doc.spans ||= {};
+  if (len > 1) doc.spans[t] = len; else delete doc.spans[t];
+  store.set(id, doc);
+  delete model.hours[s];
+  if (model.spans) delete model.spans[s];
+  store.set(view.docId, model);
+  toast(`“${text.trim()}” foi para ${next.getDate()}/${pad(next.getMonth() + 1)} às ${slotTime(at)}`);
+}
+
+// aviso rápido no pé da tela
+function toast(msg) {
+  document.querySelector('.toast')?.remove();
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  el.textContent = msg;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 3200);
+}
 
 function moveSlot(model, from, to) {
   const H = model.hours, S = (model.spans ||= {});
