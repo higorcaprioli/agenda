@@ -525,3 +525,26 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
   font-size: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.25); animation: toast-in .2s ease-out;
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* ---------- bloco de notas ---------- */
+.title-row { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
+.title-row .page-title { flex: 1; margin: 0; min-width: 0; }
+.pad-link {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--band-2); background: var(--band); color: var(--ink); text-decoration: none;
+  font: 600 14px/1 var(--sans); white-space: nowrap;
+}
+.pad-link svg { width: 18px; height: 18px; }
+.pad-link:active { background: var(--band-2); }
+.pad-list { list-style: none; margin: 16px 0 0; padding: 0; }
+.pad-list li a { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 4px; border-bottom: 1px solid var(--rule); color: var(--ink); text-decoration: none; }
+.pad-list b { font-family: var(--serif); font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pad-list small { grid-row: 1; grid-column: 2; align-self: center; font-size: 12px; color: var(--muted); }
+.pad-list .pad-prev { grid-column: 1 / -1; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pad-empty { margin-top: 18px; color: var(--muted); }
+.pad-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pad-when { flex: 1; text-align: right; font-size: 12px; color: var(--muted); }
+input.pad-title { font-family: var(--serif); font-size: 26px; font-weight: 700; height: 48px; border-bottom: 2px solid var(--ink); margin-bottom: 8px; }
+textarea.pad-text { width: 100%; font-size: 16px; min-height: 55vh; padding-top: 2px; }
+@media (max-width: 520px) { .title-row .page-title { font-size: 22px; } .pad-link { padding: 7px 10px; font-size: 13px; } }
+@media print { .pad-link, .pad-bar .g-del { display: none !important; } }

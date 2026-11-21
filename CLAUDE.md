@@ -37,7 +37,7 @@ HTML/CSS/JS puro, sem build e sem npm. Módulos ES carregados direto pelo navega
 | `privacidade.html` | Política de privacidade (contato: higoreducare@gmail.com) |
 | `download/agenda-hc.apk` | APK Android (TWA gerada no PWABuilder) |
 
-Rotas: `#/hoje`, `#/dia/AAAA-MM-DD`, `#/mes/AAAA-MM`, `#/ano/AAAA`, `#/objetivos/AAAA`, `#/notas`, `#/menu`.
+Rotas: `#/hoje`, `#/dia/AAAA-MM-DD`, `#/mes/AAAA-MM`, `#/ano/AAAA`, `#/objetivos/AAAA`, `#/notas`, `#/bloco` (Bloco de notas, aberto pelo botão em Anotações), `#/bloco/{id}`, `#/menu`.
 Ordem das abas: **Ano · Mês · Hoje · Objetivos · Anotações** (Hoje no meio; o app abre em Hoje).
 
 ## Dados (documentos no Firestore `users/{uid}/docs/{id}` e no localStorage `agenda:v1:{id}`)
@@ -49,6 +49,7 @@ Cada documento é `{ data, updatedAt }`; vence o mais recente.
 - `month:AAAA-MM` → `{ lines: { "1": "texto", ... } }`
 - `goals:AAAA` → `{ items: [{ title, steps: [{ t, done }×6], start, due, notes }] }`
 - `notes` → `{ cats: [{ id, title, items: [{ id, text, done, urgent }] }] }`
+- `pad` → `{ pages: [{ id, title, text, at }] }` (Bloco de notas; `at` = última edição em ms)
 - `events` → `{ items: [{ id, title, m (0-11), d, yearly, y? }] }` (aniversários/datas anuais)
 - `settings` → `{ theme, ev, hl, hol, font }`
 - `gsync:config` e `gsync:AAAA-MM-DD` → estado do envio ao Google (não editar à mão)

@@ -54,6 +54,7 @@ function dayHasContent(day) {
 
 // ---------- ícones ----------
 const ICON = {
+  note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h5M10 12h5"/><path d="M4 7h3M4 12h3M4 17h3"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   marker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5M9 11l6-6 4 4-6 6M9 11l4 4"/></svg>',
@@ -728,7 +729,7 @@ function renderNotes() {
 
   app.innerHTML = `
   <article class="sheet notes-page">
-    <h1 class="page-title">Anotações</h1>
+    <div class="title-row"><h1 class="page-title">Anotações</h1><a class="pad-link" href="#/bloco">${ICON.note}Bloco de notas</a></div>
     <div class="note-cats">${cats}</div>
     <button class="add-goal" data-action="add-cat">${ICON.plus}Nova lista</button>
   </article>`;
@@ -946,6 +947,93 @@ app.addEventListener('touchmove', e => { if (noteDragActive && e.cancelable) e.p
 // o toque longo não abre o menu do sistema
 app.addEventListener('contextmenu', e => { if (e.target.closest('.nitem')) e.preventDefault(); });
 
+// ---------- bloco de notas (páginas livres, estilo OneNote) ----------
+// doc `pad` → { pages: [{ id, title, text, at }] } (at = última edição, ms)
+const PAD_ID = 'pad';
+const padDoc = () => { const d = load(PAD_ID, null) || { pages: [] }; d.pages ||= []; return d; };
+const fmtWhen = ms => {
+  const d = new Date(ms), t = today();
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (iso(d) === iso(t)) return `hoje, ${hm}`;
+  if (iso(d) === iso(addDays(t, -1))) return `ontem, ${hm}`;
+  return `${d.getDate()} ${MES3[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
+};
+
+function renderPad(id) {
+  const model = padDoc();
+  const i = model.pages.findIndex(p => p.id === id);
+  if (id && i < 0) { location.replace('#/bloco'); return; }
+  if (i < 0) {
+    // lista de páginas (mais recentes primeiro)
+    view = { docId: null };
+    const list = [...model.pages].sort((a, b) => (b.at || 0) - (a.at || 0));
+    app.innerHTML = `
+    <article class="sheet pad-page">
+      <div class="title-row"><h1 class="page-title">Bloco de notas</h1><a class="pad-link" href="#/notas">‹ Anotações</a></div>
+      <button class="add-goal" data-action="pad-new">${ICON.plus}Nova página</button>
+      ${list.length ? `<ul class="pad-list">${list.map(p => `<li><a href="#/bloco/${esc(p.id)}">
+        <b>${esc(p.title.trim() || 'Sem título')}</b>
+        <span class="pad-prev">${esc((p.text || '').trim().split('\n').find(l => l.trim()) || 'Página vazia')}</span>
+        <small>${p.at ? fmtWhen(p.at) : ''}</small>
+      </a></li>`).join('')}</ul>` : '<p class="pad-empty">Nenhuma página ainda. Toque em “Nova página” para começar.</p>'}
+    </article>`;
+    document.title = 'Bloco de notas · AGENDA HC';
+    return;
+  }
+  const pg = model.pages[i];
+  view = { docId: PAD_ID, model, after: afterPadInput };
+  app.innerHTML = `
+  <article class="sheet pad-page pad-edit">
+    <div class="pad-bar">
+      <a class="pad-link" href="#/bloco">‹ Páginas</a>
+      <small class="pad-when">${pg.at ? 'Editado ' + fmtWhen(pg.at) : ''}</small>
+      <button class="g-del" data-action="pad-del" data-id="${esc(pg.id)}" title="Excluir página" aria-label="Excluir página">${ICON.trash}</button>
+    </div>
+    <input type="text" class="pad-title" data-path="pages.${i}.title" value="${esc(pg.title)}" placeholder="Título" aria-label="Título da página">
+    <textarea class="ruled pad-text" data-path="pages.${i}.text" placeholder="Escreva aqui…" aria-label="Texto da página">${esc(pg.text || '')}</textarea>
+  </article>`;
+  document.title = `${pg.title.trim() || 'Sem título'} · Bloco de notas`;
+  growPad();
+}
+
+// a área de texto cresce com o conteúdo (a página rola, não a caixa)
+function growPad() {
+  const ta = app.querySelector('.pad-text');
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.max(ta.scrollHeight, innerHeight * 0.55) + 'px';
+}
+
+function afterPadInput(el) {
+  const i = +/^pages\.(\d+)\./.exec(el.dataset.path || '')?.[1];
+  const pg = view.model.pages[i];
+  if (!pg) return;
+  pg.at = Date.now();
+  store.set(PAD_ID, view.model);
+  const when = app.querySelector('.pad-when');
+  if (when) when.textContent = 'Editado ' + fmtWhen(pg.at);
+  if (el.classList.contains('pad-text')) growPad();
+}
+
+const padActions = {
+  'pad-new'() {
+    const model = padDoc();
+    const pg = { id: newId(), title: '', text: '', at: Date.now() };
+    model.pages.push(pg);
+    store.set(PAD_ID, model);
+    location.hash = '#/bloco/' + pg.id;
+    setTimeout(() => app.querySelector('.pad-title')?.focus(), 50);
+  },
+  'pad-del'(btn) {
+    const model = padDoc();
+    const pg = model.pages.find(p => p.id === btn.dataset.id);
+    if (!pg || !confirm(`Excluir a página "${pg.title.trim() || 'Sem título'}"?`)) return;
+    model.pages = model.pages.filter(p => p !== pg);
+    store.set(PAD_ID, model);
+    location.hash = '#/bloco';
+  },
+};
+
 // ---------- menu (toque em AGENDA HC) ----------
 let installEvt = null;
 addEventListener('beforeinstallprompt', e => {
@@ -1153,6 +1241,7 @@ function render() {
   else if (v === 'objetivos') renderGoals(/^\d{4}$/.test(a) ? +a : t.getFullYear());
   else if (v === 'menu') renderMenu();
   else if (v === 'notas') renderNotes();
+  else if (v === 'bloco') { renderPad(a); tab = 'notas'; }
   else { renderDay(t, true); tab = 'hoje'; }
   paintTabs(tab === 'dia' ? 'hoje' : tab);
 }
@@ -1218,6 +1307,7 @@ const actions = {
   },
   ...menuActions,
   ...notesActions,
+  ...padActions,
   ...settingsActions,
   'pick-date'() {
     const input = app.querySelector('.sr-date');
