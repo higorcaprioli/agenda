@@ -467,6 +467,8 @@ input.nc-title { font-family: var(--serif); font-size: 20px; font-weight: 700; h
   .note-cats { grid-template-columns: 1fr; }
   .tabs svg { width: 22px; height: 22px; }
   #app { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body.typing .tabs { display: none; }
+  body.typing #app { padding-bottom: 40vh; }
 
   .toolbar { margin: 12px 16px 0; }
   .tb-title { font-size: 18px; }

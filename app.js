@@ -947,6 +947,14 @@ app.addEventListener('touchmove', e => { if (noteDragActive && e.cancelable) e.p
 // o toque longo não abre o menu do sistema
 app.addEventListener('contextmenu', e => { if (e.target.closest('.nitem')) e.preventDefault(); });
 
+// celular: enquanto o teclado está aberto (digitando), esconde a barra de abas para sobrar espaço
+const touchOnly = matchMedia('(hover: none)');
+const isTyping = el => el?.matches?.('input[type=text]:not([readonly]), input:not([type]), textarea') && !el.disabled;
+document.addEventListener('focusin', e => { if (touchOnly.matches && isTyping(e.target)) document.body.classList.add('typing'); });
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (!isTyping(document.activeElement)) document.body.classList.remove('typing');
+}, 120));
+
 // ---------- bloco de notas (páginas livres, estilo OneNote) ----------
 // doc `pad` → { pages: [{ id, title, text, at }] } (at = última edição, ms)
 const PAD_ID = 'pad';
@@ -993,16 +1001,55 @@ function renderPad(id) {
     <textarea class="ruled pad-text" data-path="pages.${i}.text" placeholder="Escreva aqui…" aria-label="Texto da página">${esc(pg.text || '')}</textarea>
   </article>`;
   document.title = `${pg.title.trim() || 'Sem título'} · Bloco de notas`;
-  growPad();
+  growPad(true);
 }
 
-// a área de texto cresce com o conteúdo (a página rola, não a caixa)
-function growPad() {
+// a área de texto cresce com o conteúdo (a página rola, não a caixa).
+// Enquanto digita só cresce (encolher a cada letra fazia a tela pular); ao abrir, ajusta de vez.
+function growPad(fresh = false) {
   const ta = app.querySelector('.pad-text');
   if (!ta) return;
-  ta.style.height = 'auto';
-  ta.style.height = Math.max(ta.scrollHeight, innerHeight * 0.55) + 'px';
+  const min = innerHeight * 0.55;
+  if (fresh) ta.style.height = 'auto';
+  const h = Math.max(ta.scrollHeight, min);
+  if (fresh || h > ta.offsetHeight) ta.style.height = h + 'px';
 }
+
+// posição (na tela) da linha onde está o cursor dentro de um textarea
+function caretRect(ta) {
+  const cs = getComputedStyle(ta);
+  const m = document.createElement('div');
+  for (const k of ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'tabSize']) m.style[k] = cs[k];
+  Object.assign(m.style, { position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', borderStyle: 'solid' });
+  m.textContent = ta.value.slice(0, ta.selectionEnd);
+  const mark = document.createElement('span');
+  mark.textContent = '\u200b';
+  m.append(mark);
+  document.body.append(m);
+  const top = ta.getBoundingClientRect().top + mark.offsetTop - ta.scrollTop;
+  const lh = parseFloat(cs.lineHeight) || 24;
+  m.remove();
+  return { top, bottom: top + lh };
+}
+
+// mantém a linha do cursor visível acima do teclado enquanto escreve
+function keepCaretVisible(ta) {
+  if (!ta || document.activeElement !== ta) return;
+  const vv = window.visualViewport;
+  const viewTop = (vv ? vv.offsetTop : 0) + (document.querySelector('.appbar')?.offsetHeight || 0);
+  const tabs = document.getElementById('tabs');
+  const tabsTop = tabs && tabs.offsetParent !== null && getComputedStyle(tabs).position === 'fixed' ? tabs.getBoundingClientRect().top : Infinity;
+  const viewBottom = Math.min(vv ? vv.offsetTop + vv.height : innerHeight, tabsTop) - 24;
+  const r = caretRect(ta);
+  if (r.bottom > viewBottom) scrollBy(0, r.bottom - viewBottom);
+  else if (r.top < viewTop + 8) scrollBy(0, r.top - viewTop - 8);
+}
+const padCaret = () => requestAnimationFrame(() => keepCaretVisible(app.querySelector('.pad-text')));
+app.addEventListener('keyup', e => { if (e.target.matches?.('.pad-text')) padCaret(); });
+app.addEventListener('click', e => { if (e.target.matches?.('.pad-text')) setTimeout(padCaret, 350); });
+window.visualViewport?.addEventListener('resize', () => { if (document.activeElement?.matches?.('.pad-text')) padCaret(); });
 
 function afterPadInput(el) {
   const i = +/^pages\.(\d+)\./.exec(el.dataset.path || '')?.[1];
@@ -1012,7 +1059,7 @@ function afterPadInput(el) {
   store.set(PAD_ID, view.model);
   const when = app.querySelector('.pad-when');
   if (when) when.textContent = 'Editado ' + fmtWhen(pg.at);
-  if (el.classList.contains('pad-text')) growPad();
+  if (el.classList.contains('pad-text')) { growPad(); padCaret(); }
 }
 
 const padActions = {
