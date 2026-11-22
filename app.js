@@ -1182,12 +1182,16 @@ function settingsHtml() {
     </div>`;
   };
   return `<section class="m-sec">
-    <h2>Cor / Fonte</h2>
+    <h2>Configurações</h2>
     <div class="set-row">
       <span class="set-lbl">Tema</span>
       <div class="seg">${THEMES.map(([v, n]) => `<button class="${(s.theme || '') === v ? 'on' : ''}" data-action="set" data-k="theme" data-v="${v}">${n}</button>`).join('')}</div>
     </div>
     ${Object.entries(PALETTES).map(([k, p]) => colorRow(k, p)).join('')}
+    <div class="set-row">
+      <span class="set-lbl">Aba Hoje abre</span>
+      <div class="seg">${[['', 'No início da página'], ['hora', 'Na hora atual']].map(([v, n]) => `<button class="${(s.hojeAbre || '') === v ? 'on' : ''}" data-action="set" data-k="hojeAbre" data-v="${v}">${n}</button>`).join('')}</div>
+    </div>
     <div class="set-row">
       <span class="set-lbl">Fonte</span>
       <div class="fonts">
@@ -1203,7 +1207,7 @@ function settingsHtml() {
 const settingsActions = {
   set(btn) { saveSetting(btn.dataset.k, btn.dataset.v); },
   'reset-settings'() {
-    if (!confirm('Voltar tema, cores e fonte para o padrão?')) return;
+    if (!confirm('Voltar tema, cores, fonte e abertura da aba Hoje para o padrão?')) return;
     store.set(SETTINGS_ID, {});
     window.AgendaTheme?.apply({});
     rerender();
@@ -1445,14 +1449,15 @@ function checkNewDay() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewDay(); });
 setInterval(checkNewDay, 60_000);
 
-// Ano: rola até o mês atual · Mês: até o dia de hoje · Hoje: até a hora atual
+// Ano: rola até o mês atual · Mês: até o dia de hoje · Hoje: até a hora atual (só se escolhido
+// nas configurações; o padrão é abrir no início da página)
 function focusToday() {
   let el, target;
   const cell = app.querySelector('.year td.today');
   const mrow = app.querySelector('.month-list .mrow.today');
   if (cell) { el = cell; target = cell.closest('.mini'); }
   else if (mrow) el = target = mrow;
-  else if (app.querySelector('.day-meta .chip.today')) {
+  else if (app.querySelector('.day-meta .chip.today') && settings().hojeAbre === 'hora') {
     const rows = app.querySelectorAll('.hours .hour');
     const k = Math.min(Math.max(new Date().getHours() - HOURS[0], 0), rows.length - 1);
     el = target = rows[k];

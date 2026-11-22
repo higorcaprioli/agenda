@@ -51,7 +51,7 @@ Cada documento é `{ data, updatedAt }`; vence o mais recente.
 - `notes` → `{ cats: [{ id, title, items: [{ id, text, done, urgent }] }] }`
 - `pad` → `{ pages: [{ id, title, text, at }] }` (Bloco de notas; `at` = última edição em ms)
 - `events` → `{ items: [{ id, title, m (0-11), d, yearly, y? }] }` (aniversários/datas anuais)
-- `settings` → `{ theme, ev, hl, hol, font }`
+- `settings` → `{ theme, ev, hl, hol, font, hojeAbre }` (`hojeAbre: 'hora'` = aba Hoje rola até a hora atual; padrão = início)
 - `gsync:config` e `gsync:AAAA-MM-DD` → estado do envio ao Google (não editar à mão)
 
 ## Detalhes importantes
